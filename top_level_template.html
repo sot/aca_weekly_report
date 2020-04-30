@@ -1,0 +1,46 @@
+
+<HTML>
+<HEAD>
+</HEAD>
+<BODY>
+
+<H1>Weekly Report</H1>
+
+<table border=1>
+<tr>
+<th></th>
+<th></th>
+<th></th>
+<th>one shot</th>
+<th>p2</th>
+<th>n_acq</th>
+<th>acq</th>
+<th>guide</th>
+<th>warns</th>
+{% for row in metrics %}
+<tr>
+<td>{{ row['obsid'] }}</td>
+<td><a href="{{ row['dash_url'] }}">dash</a></td>
+<td><a href="{{ row['mica_url'] }}">mica</a></td>
+<td align=center>
+{% if row['man_ok'] == False -%}
+<font color="red">
+{% endif -%}
+{{ "%.1f"|format(row['one_shot'])}}
+{% if row['man_ok'] == False -%}
+</font>
+{% endif -%}
+</td>
+<td>{{ "%.1f"|format(row['p2']) }}</td>
+<td align=center>{{ row['n_acq'] }}</td>
+{% if row['n_acq'] == -1 -%}
+<td>---</td>
+<td>---</td>
+{% else %}
+<td><A HREF="{{ row['acq_url'] }}">ACQ</A></td>
+<td><A HREF="{{ row['guide_url'] }}">GUIDE</A></td>
+{% endif %}
+<td>{{ row['warns'] }}</td>
+</tr>
+{% endfor %}
+</table>
