@@ -4,14 +4,20 @@
 </HEAD>
 <BODY>
 
-<pre>
+<TABLE border=1>
+<TR>
+{% for col in table.colnames -%}
+<TH>{{ col }}</TH>
+{% endfor -%}
+</TR>
+{% for row in table -%}
+<TR>
+{% for col in table.colnames -%}
+<TD>{{ row[col] }}</TD> 
+{% endfor -%}
+</TR>
+{% endfor -%}
+</TABLE>
 
-{% for warn in warns %}
-{{ warn }}
-{% endfor %}
-
-{{ table }}
-
-</pre>
 </BODY>
 </HTML>
