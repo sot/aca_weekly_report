@@ -27,10 +27,9 @@ import proseco.core
 from proseco.acq import get_p_man_err
 
 MP_STARCATS = None
-ACQ_STATS = mica.stats.acq_stats.get_stats()
-GUIDE_STATS = mica.stats.guide_stats.get_stats()
-HI_BGD = Table.read('/proj/sot/ska/data/aca_hi_bgd_mon/bgd_events.dat',
-                    format='ascii')
+ACQ_STATS = None
+GUIDE_STATS = None
+HI_BGD = None
 MP_DIR = '/data/mpcrit1/mplogs'
 
 
@@ -134,6 +133,7 @@ def get_acq_anoms(acqs):
 def get_guide_data(pcat):
     guides = pcat.guides.copy()
     guides = guides['id', 'slot', 'yang', 'zang', 'mag']
+    global GUIDE_STATS
     obs_gui_stats = Table(GUIDE_STATS[GUIDE_STATS['obsid'] == pcat.obsid])[
         'agasc_id', 'f_track', 'f_within_3', 'f_within_5', 'dy_mean', 'dz_mean']
     obs_gui_stats.rename_column('agasc_id', 'id')
@@ -353,31 +353,6 @@ def get_obsmetrics(manvr):
     return metric, warn_map
 
 
-    #metric['warns'] = ",".join(url_warns)
-
-
-MP_STARCATS = get_all_starcats()
-
-
-# should get start time from last processed for continuity
-start = DateTime() - 14
-manvrs = events.manvrs.filter(start=start)
-
-
-metrics = []
-warn_maps = []
-for manvr in manvrs:
-    if manvr.acq_start is None:
-        print(f"Skip {manvr.obsid} has no acquisition")
-        continue
-    print(manvr.start, manvr.stop, manvr.obsid)
-    metric, warn_map = get_obsmetrics(manvr)
-    metrics.append(metric)
-    warn_maps.append(warn_map)
-
-metrics = Table(metrics)
-
-
 def make_metric_print(metrics, warn_maps):
     print_cols = ['obsid', 'start', 'mica_url', 'dash_url', 'acq_url', 'guide_url',
                   't_ccd',
@@ -427,18 +402,56 @@ def make_metric_print(metrics, warn_maps):
     print_table['warns'] = all_warns
     return Table(print_table)
 
-metric_print = make_metric_print(metrics, warn_maps)
 
-outdir = "."
-file_dir = Path(__file__).parent
-template = Template(open(file_dir / "top_level_template.html", 'r').read())
-page = template.render(metrics=metric_print)
-f = open(os.path.join(outdir, "index_draft.html"), "w")
-f.write(page)
-f.close()
+def main():
+    # these globals are cop-outs but ...
 
-#reports = 'newreports.dat'
-#Table(metrics).write(reports)
+    global ACQ_STATS
+    ACQ_STATS = mica.stats.acq_stats.get_stats()
+    global GUIDE_STATS
+    GUIDE_STATS = mica.stats.guide_stats.get_stats()
+    global HI_BGD
+    HI_BGD = Table.read('/proj/sot/ska/data/aca_hi_bgd_mon/bgd_events.dat',
+                        format='ascii')
+    global MP_STARCATS
+    MP_STARCATS = get_all_starcats()
+
+
+    # should get start time from last processed for continuity
+    start = DateTime() - 7
+    manvrs = events.manvrs.filter(start=start)
+
+
+    metrics = []
+    warn_maps = []
+    for manvr in manvrs:
+        if manvr.acq_start is None:
+            print(f"Skip {manvr.obsid} has no acquisition")
+            continue
+        print(manvr.start, manvr.stop, manvr.obsid)
+        metric, warn_map = get_obsmetrics(manvr)
+        metrics.append(metric)
+        warn_maps.append(warn_map)
+
+    metrics = Table(metrics)
+
+    metric_print = make_metric_print(metrics, warn_maps)
+
+    outdir = "."
+    file_dir = Path(__file__).parent
+    template = Template(open(file_dir / "top_level_template.html", 'r').read())
+    page = template.render(metrics=metric_print)
+    f = open(os.path.join(outdir, "index_draft.html"), "w")
+    f.write(page)
+    f.close()
+
+    #reports = 'newreports.dat'
+    #Table(metrics).write(reports)
+
+
+if __name__ == '__main__':
+    main()
+
 
 
 
