@@ -1,51 +1,78 @@
-
 <HTML>
 <HEAD>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/js/jquery.stickytableheaders.js"></script>
+<script src="https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/js/jquery.tablesorter.js"></script>
+<script>
+  $(document).ready(function () {
+  // initialize stickyTableHeaders _after_ tablesorter
+  $(".tablesorter").tablesorter();
+  $("table").stickyTableHeaders();
+  });
+  </script>
+
+<STYLE>
+
+table.tablesorter thead tr .header
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/bg.gif);
+background-repeat: no-repeat;
+background-position: center right;
+padding-right: 20px;
+cursor: pointer;
+}
+
+table.tablesorter thead tr .headerSortUp
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/asc.gif);
+}
+table.tablesorter thead tr .headerSortDown
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/desc.gif);
+}
+table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp
+{
+color: #000;
+}
+table th { background-color: white; }
+
+table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 3px solid black;
+}
+
+th, td {
+    padding: 5px;
+    border: 1px solid black;
+}
+
+td.bad {
+    color: red;
+}
+
+td.align-right {
+  text-align: right;
+}
+</STYLE>
+
 </HEAD>
 <BODY>
 
 <H1>Weekly Report</H1>
 
-<table border=1>
-<tr>
-<th>obsid</th>
-<th>start</th>
-<th>mica_url</th>
-<th>dash_url</th>
-<th>t_ccd</th>
-<th>one shot before</th>
-<th>one shot after</th>
-<th>p2</th>
-<th>n_acq</th>
-<th>guide_count</th>
-<th>n_good_guide</th>
-<th>acq</th>
-<th>guide</th>
-<th>warns</th>
-{% for row in metrics %}
-<tr>
-<td>{{ row['obsid'] }}</td>
-<td align=center>{{ row['start'] }}</td>
-<td><a href="{{ row['mica_url'] }}">mica</a></td>
-<td><a href="{{ row['dash_url'] }}">dash</a></td>
-<td align=center>{{ row['t_ccd'] }}</td>
-<td align=center>{{ row['one_shot_before'] }}</td>
-<td align=center>{{ row['one_shot_after'] }}</td>
-<td align=center>{{ row['p2'] }}</td>
-<td align=center>{{ row['n_acq'] }}</td>
-<td align=center>{{ row['guide_count'] }}</td>
-<td align=center>{{ row['n_good_guide'] }}</td>
-{% if row['n_acq'] == '-1' -%}
-<td>---</td>
-{% else %}
-<td><A HREF="{{ row['acq_url'] }}">ACQ</A></td>
-{% endif -%}
-{% if row['n_good_guide'] == '-1' -%}
-<td>---</td>
-{% else -%}
-<td><A HREF="{{ row['guide_url'] }}">GUIDE</A></td>
-{% endif %}
-<td>{{ row['warns'] }}</td>
+<table border=1 class="tableWithFloatingHeader tablesorter">
+<thead><tr>{% for name in metrics.colnames %}
+<th>{{ name }}</th>{% endfor %}</tr>
+{% for ii in range(metrics|length) -%}
+<tr></thead>
+{% for name in metrics.colnames -%}
+<td {% if name in markup.colnames and markup[name][ii] 
+%} class="{{ markup[name][ii] }}" {% endif %}>{{ metrics[name][ii] -}}</td>
+{% endfor -%}
 </tr>
 {% endfor %}
 </table>
+
+</BODY>
+</HTML>

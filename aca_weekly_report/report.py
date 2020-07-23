@@ -1,50 +1,68 @@
+# coding: utf-8
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+
+"""
+Make a report of performance during recent observations.
+"""
 import os
-from glob import glob
+import argparse
 import numpy as np
 from jinja2 import Template
 from pathlib import Path
 import pickle
 import gzip
-import logging
-from astropy.table import Table, join
+from astropy.table import Table, join, vstack
 from collections import defaultdict
 import tables
+import logging
 
 import Ska.DBI
 from Chandra.Time import DateTime
+import kadi.paths
 from kadi import events
 from Ska.engarchive import fetch_sci
 from Ska.engarchive.fetch import get_time_range
 from Ska.engarchive.utils import logical_intervals
-from chandra_aca.centroid_resid import CentroidResiduals
-
-from mica.common import MICA_ARCHIVE
 import mica.starcheck
 import mica.stats.acq_stats
 import mica.stats.guide_stats
-import proseco
-import proseco.core
 from proseco.acq import get_p_man_err
 
+SKA = os.environ['SKA']
 MP_STARCATS = None
 ACQ_STATS = None
 GUIDE_STATS = None
 HI_BGD = None
-MP_DIR = '/data/mpcrit1/mplogs'
+MP_DIR = Path(SKA) / 'data' / 'mpcrit1' / 'mplogs'
+
+
+def get_options():
+    parser = argparse.ArgumentParser(description="Run weekly report making")
+    parser.add_argument("--out",
+                        default=".",
+                        help="output directory, default is '.'")
+    parser.add_argument("--start",
+                        help="start time for search for manvrs for report")
+    parser.add_argument("--stop",
+                        help="stop time for search for manvrs for report")
+    opt = parser.parse_args()
+    return opt
 
 
 def get_all_starcats():
-    with tables.open_file('/proj/sot/ska/data/kadi/cmds.h5', 'r') as h5:
+    with tables.open_file(Path(kadi.paths.DATA_DIR()) / 'cmds.h5', 'r') as h5:
         all_cmds = Table(h5.root.data[:])
     kadi_starcats = all_cmds[all_cmds['type'] == 'MP_STARCAT']
 
-    with Ska.DBI.DBI(dbi='sqlite', server='/proj/sot/ska/data/cmd_states/cmd_states.db3') as db:
+    with Ska.DBI.DBI(
+            dbi='sqlite',
+            server=Path(SKA) / 'data' / 'cmd_states' / 'cmd_states.db3') as db:
         timelines = Table(db.fetchall("select * from timeline_loads"))
     timelines.rename_column('id', 'timeline_id')
 
     kadi_starcats['date'] = kadi_starcats['date'].astype(str)
     mp_starcats = join(kadi_starcats['date', 'timeline_id'],
-                       timelines['timeline_id', 'mp_dir'], 
+                       timelines['timeline_id', 'mp_dir'],
                        keys=['timeline_id'],
                        )['date', 'mp_dir']
     mp_starcats.sort('date')
@@ -57,18 +75,20 @@ def man_ok(one_shot, p_man_err):
 
 def get_proseco_catalog(manvr):
     mp_starcat = MP_STARCATS[MP_STARCATS['date'] <= manvr.stop][-1]
-    pfiles = glob(os.path.join(MP_DIR, mp_starcat['mp_dir'][1:], 'output', '*proseco.pkl.gz'))
+    pfiles = sorted((MP_DIR / mp_starcat['mp_dir'][1:] / 'output').glob('*proseco.pkl.gz'))
     if len(pfiles) == 1:
         acas = pickle.load(gzip.open(pfiles[0], 'rb'))
-        dates =[acas[obsid].meta['date'] for obsid in acas]
+        times = [DateTime(acas[obsid].meta['date']).secs for obsid in acas]
         obsids = [obsid for obsid in acas]
-        ptable = Table([dates, obsids], names=['dates', 'obsid'])
-        ptable.sort('dates')
-        obsid = int(ptable[ptable['dates'] < manvr.stop][-1]['obsid'])
+        ptable = Table([times, obsids], names=['times', 'obsid'])
+        ptable.sort('times')
+
+        # So far, only obsid 47188 in recovery shows a manvr time after the catalog time
+        # but I've added a minute of slop/padding to the operation to grab the catalog.
+        obsid = int(ptable[ptable['times'] < (DateTime(manvr.stop).secs + 60)][-1]['obsid'])
         pcat = acas[obsid]
     else:
         raise ValueError("No proseco catalog available.")
-        #obsid, pcat = fake_pcat(manvr.obsid, mp_starcat['mp_dir'])
     return pcat
 
 
@@ -81,12 +101,12 @@ def get_proseco_data(pcat):
         pdata = {'pred_t_ccd_acq': pcat.call_args['t_ccd_acq'],
                  'pred_t_ccd_guide': pcat.call_args['t_ccd_guide'],
                  'p2': p2,
-                 'guide_count': guide_count}
+                 'guide count': guide_count}
     else:
         pdata = {'pred_t_ccd_acq': np.nan,
                  'pred_t_ccd_guide': np.nan,
                  'p2': np.nan,
-                 'guide_count': np.nan}
+                 'guide count': np.nan}
     return pdata
 
 
@@ -94,7 +114,7 @@ def get_fid_data(pcat):
     if len(pcat.fids) == 0:
         return []
     with Ska.DBI.DBI(dbi='sybase', server='sybase', user='aca_read') as db:
-        fids =  db.fetchall(
+        fids = db.fetchall(
             f"select * from trak_stats_data where obsid = {pcat.obsid} and type = 'FID'")
     if len(fids) > 0:
         fids = Table(fids)
@@ -110,14 +130,14 @@ def get_fid_data(pcat):
 
 def get_acq_data(pcat):
     obs_acq_stats = Table(ACQ_STATS[ACQ_STATS['obsid'] == pcat.obsid])[
-        'agasc_id', 'acqid', 'mag_obs', 'cdy', 'cdz', 'sat_pix', 'ion_rad']
+        'agasc_id', 'acqid', 'mag_obs', 'dy', 'dz', 'cdy', 'cdz', 'sat_pix', 'ion_rad']
     obs_acq_stats.rename_column('agasc_id', 'id')
     if len(obs_acq_stats) == 0:
         return []
     acqs = pcat.acqs.copy()
     acqs = acqs['id', 'slot', 'yang', 'zang', 'mag', 'halfw', 'p_acq']
     acqs = join(acqs, obs_acq_stats)
-    for col in ['yang', 'zang', 'mag', 'cdy', 'cdz', 'mag_obs']:
+    for col in ['yang', 'zang', 'mag', 'dy', 'dz', 'cdy', 'cdz', 'mag_obs']:
         acqs[col].format = '.1f'
     acqs['p_acq'].format = '.2f'
     return acqs
@@ -125,8 +145,8 @@ def get_acq_data(pcat):
 
 def get_acq_anoms(acqs):
     for acq in acqs:
-        if ((abs(acq['cdy']) > acq['halfw'] + 10) or
-            (abs(acq['cdz']) > acq['halfw'] + 10)):
+        if ((abs(acq['dy']) > acq['halfw'] + 20) or
+                (abs(acq['dz']) > acq['halfw'] + 20)):
             return True
 
 
@@ -135,7 +155,7 @@ def get_guide_data(pcat):
     guides = guides['id', 'slot', 'yang', 'zang', 'mag']
     global GUIDE_STATS
     obs_gui_stats = Table(GUIDE_STATS[GUIDE_STATS['obsid'] == pcat.obsid])[
-        'agasc_id', 'f_track', 'f_within_3', 'f_within_5', 'dy_mean', 'dz_mean']
+        'agasc_id', 'type', 'f_track', 'f_within_3', 'f_within_5', 'dy_mean', 'dz_mean']
     obs_gui_stats.rename_column('agasc_id', 'id')
     if len(obs_gui_stats) == 0:
         return []
@@ -155,36 +175,23 @@ def get_max_tccd(start, stop):
 
 
 def get_manvr_data(manvr):
-    p_man_err_before = proseco.acq.get_p_man_err(manvr.one_shot,
-                                                 manvr.angle)
+    p_man_err_before = get_p_man_err(manvr.one_shot,
+                                     manvr.angle)
     if manvr.get_next() is False:
         one_shot_after = -1
         man_angle_after = -1
-        p_man_err_after = 0
+        p_man_err_after = 0.0
     else:
         one_shot_after = manvr.get_next().one_shot
         man_angle_after = manvr.get_next().angle
-        p_man_err_after = proseco.acq.get_p_man_err(one_shot_after,
-                                                    man_angle_after)
-    return {'man_angle_before': manvr.angle,
-            'one_shot_before': manvr.one_shot,
-            'p_man_err_before': p_man_err_before,
-            'one_shot_after': one_shot_after,
-            'man_angle_after': man_angle_after,
-            'p_man_err_after': p_man_err_after}
-
-
-def make_cat_page(cat_data, out='./acq.html'):
-    if len(cat_data) == 0:
-        return
-    file_dir = Path(__file__).parent
-    template = Template(open(file_dir / "cat_template.html", 'r').read())
-    formats = {col: f'%{cat_data[col].format}' for col in cat_data.colnames
-               if cat_data[col].format is not None}
-    page = template.render(table=cat_data)
-    f = open(out, "w")
-    f.write(page)
-    f.close()
+        p_man_err_after = get_p_man_err(one_shot_after,
+                                        man_angle_after)
+    return {'man angle before': manvr.angle,
+            'one shot before': manvr.one_shot,
+            'p man err before': p_man_err_before,
+            'one shot after': one_shot_after,
+            'man angle after': man_angle_after,
+            'p man err after': p_man_err_after}
 
 
 def kalman_ok(kalman_data):
@@ -198,8 +205,8 @@ def get_kalman_data(manvr):
     if manvr.get_next() is False or trange[1] < DateTime(manvr.get_next().start).secs:
         return kalman_data
     dat = fetch_sci.Msidset(['AOKALSTR', 'AOPCADMD', 'AOACASEQ'],
-                              manvr.guide_start,
-                              manvr.get_next().start)
+                            manvr.guide_start,
+                            manvr.get_next().start)
     dat.interpolate(1.025)
     ok = (dat['AOACASEQ'].vals == 'KALM') & (dat['AOPCADMD'].vals == 'NPNT')
     kalman_data['min_kalstr'] = np.min(dat['AOKALSTR'].vals[ok].astype(int))
@@ -214,22 +221,22 @@ def get_kalman_data(manvr):
 
 def is_cdy_acq_anom(acq):
     return abs(acq['cdy']) > (acq['halfw'] + 10)
-            
+
 
 def is_cdz_acq_anom(acq):
     return abs(acq['cdz']) > (acq['halfw'] + 10)
 
 
 def is_p_acq_anom(acq):
-    return ((acq['p_acq'] > 0.95) & (acq['acqid'] == False))
+    return ((acq['p_acq'] > 0.95) and (not acq['acqid']))
 
 
 def is_guide_poorly_tracked(guide):
-    return guide['f_within_3'] < 0.90
+    return guide['f_within_3'] < 0.95
 
 
 def is_acquired(acq):
-    return acq['acqid'] == True
+    return acq['acqid']
 
 
 def is_fid_poorly_tracked(fid):
@@ -250,6 +257,7 @@ def get_n_good_guides(guides):
         return np.count_nonzero(np.array([not is_guide_poorly_tracked(guide)
                                           for guide in guides]))
 
+
 def get_n_bad_fids(fids):
     if len(fids) == 0:
         return -1
@@ -259,52 +267,76 @@ def get_n_bad_fids(fids):
 
 def check_cat_data(cat, warn_funcs, warn_cols):
     if len(cat) == 0:
-        return [], False
+        return Table(), Table(), False
     print_cat = Table(np.zeros((len(cat), len(cat.colnames))).astype(str),
                       names=cat.colnames)
-    for col in cat.colnames:
+
+    # Set up table string formatting
+    for name in cat.colnames:
         for row_idx in range(len(cat)):
-            if cat[col].format is not None:
-                print_cat[col][row_idx] = cat[col].pformat(show_name=False)[row_idx]
+            if cat[name].format is not None:
+                print_cat[name][row_idx] = cat[name].pformat(show_name=False)[row_idx]
             else:
-                print_cat[col][row_idx] = f'{cat[col][row_idx]}'
-    had_warn = False
-    for row_idx in range(len(cat)):
-        for func, col in zip(warn_funcs, warn_cols):
-            if func(cat[row_idx]):
-                print_cat[col][row_idx] = f'<font color="red">{print_cat[col][row_idx]}</font>'
-                had_warn = True
-    return print_cat, had_warn
+                print_cat[name][row_idx] = f'{cat[name][row_idx]}'
+
+    # Make a status dictionary (just bad status for now).
+    has_warn = False
+    status = defaultdict(list)
+    for row_idx, row in enumerate(cat):
+        for func, name in zip(warn_funcs, warn_cols):
+            if func(row):
+                status[name].append(row_idx)
+                has_warn = True
+
+    # Save status and CSS formating in a table
+    td_class = Table()
+    for name in cat.colnames:
+        td_classes_list = []
+        for ii in range(len(cat)):
+            td_classes = []
+            if name in status and ii in status[name]:
+                td_classes.append('bad')
+            if cat[name].dtype.kind in ('i', 'f'):
+                td_classes.append('align-right')
+            td_classes_list.append(td_classes)
+        td_class[name] = [' '.join(x) for x in td_classes_list]
+
+    return print_cat, td_class, has_warn
 
 
 def get_and_check_cats(pcat, strobs):
     cat_data = {}
     fid_data = get_fid_data(pcat)
-    cat_data['n_bad_fid'] = get_n_bad_fids(fid_data)
-    fid_print_data, fid_warn = check_cat_data(fid_data,
-                                              [is_fid_poorly_tracked],
-                                              ['f_track'])
-    make_cat_page(fid_print_data, f'./reps/{strobs}_fid.html')
+    cats = {}
+    cat_data['n bad fid'] = get_n_bad_fids(fid_data)
+    fid_print_data, fid_tds, fid_warn = check_cat_data(
+        fid_data, [is_fid_poorly_tracked], ['f_track'])
+    cats['fid'] = {'table': fid_print_data,
+                   'markup': fid_tds,
+                   'name': 'FID'}
+    cat_data['fid_warn'] = fid_warn
 
     guide_data = get_guide_data(pcat)
-    cat_data['n_good_guide'] = get_n_good_guides(guide_data)
-    guide_print_data, guide_warn = check_cat_data(guide_data,
-                                                      [is_guide_poorly_tracked],
-                                                      ['f_within_3'])
-    make_cat_page(guide_print_data, f'./reps/{strobs}_guide.html')
+    cat_data['n good guide'] = get_n_good_guides(guide_data)
+    guide_print_data, guide_tds, guide_warn = check_cat_data(
+        guide_data,
+        [is_guide_poorly_tracked], ['f_within_3'])
+    cats['guide'] = {'table': guide_print_data,
+                     'markup': guide_tds,
+                     'name': 'GUIDE'}
+    cat_data['guide_warn'] = guide_warn
 
     acq_data = get_acq_data(pcat)
     cat_data['n_acq'] = get_n_acq(acq_data)
-    acq_print_data, acq_warn = check_cat_data(
+    acq_print_data, acq_tds, acq_warn = check_cat_data(
         acq_data,
         [is_cdy_acq_anom, is_cdz_acq_anom, is_p_acq_anom],
         ['cdy', 'cdz', 'acqid'])
-    make_cat_page(acq_print_data, f'./reps/{strobs}_acq.html')
-
-    cat_data.update({'fid_warn': fid_warn,
-                     'guide_warn': guide_warn,
-                     'acq_warn': acq_warn})
-    return cat_data
+    cats['acq'] = {'table': acq_print_data,
+                   'markup': acq_tds,
+                   'name': 'ACQ'}
+    cat_data['acq_warn'] = acq_warn
+    return cat_data, cats
 
 
 def t_ccd_ok(dat):
@@ -312,11 +344,10 @@ def t_ccd_ok(dat):
 
 
 def get_obsmetrics(manvr):
-    warns = []
     metric = {'obsid': manvr.obsid,
               'start': manvr.acq_start}
-    if manvr.get_next() is not False:
-        metric['t_ccd'] = get_max_tccd(manvr.acq_start, manvr.get_next().start)
+    if manvr.next_nman_start is not False:
+        metric['t_ccd'] = get_max_tccd(manvr.acq_start, manvr.next_nman_start)
     else:
         metric['t_ccd'] = np.nan
 
@@ -326,132 +357,178 @@ def get_obsmetrics(manvr):
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
     strobs = f'{obsid:05d}'
-    cat_data  = get_and_check_cats(pcat, strobs)
-    for dat in (manvr_data, proseco_data, kal_data, cat_data): 
+    cat_data, cats = get_and_check_cats(pcat, strobs)
+    for dat in (manvr_data, proseco_data, kal_data, cat_data):
         metric.update(dat)
 
-    links = {'acq_url': f"./reps/{strobs}_acq.html",
-             'guide_url': f"./reps/{strobs}_guide.html",
-             'fid_url' : f"./reps/{strobs}_fid.html",
-             'dash_url':
+    links = {'detail_url': f'./obs_{metric["obsid"]}_{metric["start"]}.html',
+             'dash':
              f'https://icxc.cfa.harvard.edu/aspect/centroid_dashboard/{strobs[0:2]}/{strobs}/',
-             'mica_url':
+             'mica':
              f'https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/'}
 
     metric.update(links)
     warn_map = {
         'KAL': 'http://cxc.cfa.harvard.edu/mta/ASPECT/kalman_watch/',
-        'ANOM': metric['mica_url'],
+        'ANOM': metric['mica'],
         'HI_BGD':
         f'https://cxc.cfa.harvard.edu/mta/ASPECT/aca_hi_bgd_mon/events/obs_{strobs}/index.html',
-        'MANVR': metric['dash_url'],
-        'ACQ': metric['acq_url'],
-        'GUIDE': metric['guide_url'],
-        'FID': metric['fid_url'],
-        'T_CCD': metric['mica_url'],
+        'MANVR': metric['dash'],
+        'ACQ': metric['detail_url'],
+        'GUIDE': metric['detail_url'],
+        'FID': metric['detail_url'],
+        'T_CCD': metric['mica'],
     }
-    return metric, warn_map
+
+    return metric, cats, warn_map
 
 
-def make_metric_print(metrics, warn_maps):
-    print_cols = ['obsid', 'start', 'mica_url', 'dash_url', 'acq_url', 'guide_url',
-                  't_ccd',
-                  'one_shot_before', 'one_shot_after',
+def make_metric_print(dat, warn_map):
+
+    # Make a status dictionary (just bad status for now).
+    status = {}
+    end_warns = []
+    for ctype in ['FID', 'GUIDE', 'ACQ']:
+        if dat[f'{ctype.lower()}_warn']:
+            end_warns.append((ctype, warn_map[ctype]))
+    if not np.isnan(dat['t_ccd']) and not t_ccd_ok(dat):
+        end_warns.append(('T_CCD', warn_map['T_CCD']))
+        status['t_ccd'] = True
+    if not man_ok(dat['one shot before'], dat['p man err before']):
+        end_warns.append(('MANVR', warn_map['MANVR']))
+        status['one shot before'] = True
+    if not man_ok(dat['one shot after'], dat['p man err after']):
+        status['one shot after'] = True
+    if not kalman_ok(dat):
+        end_warns.append(('KAL', warn_map['KAL']))
+    if dat['obsid'] in HI_BGD['obsid']:
+        end_warns.append(('HI_BGD', warn_map['HI_BGD']))
+    href_warns = []
+    href_warns = ','.join([f"<A HREF='{w[1]}'>{w[0]}</A>" for w in end_warns])
+
+    print_cols = ['t_ccd', 'man angle before', 'man angle after',
+                  'one shot before', 'one shot after',
+                  'p man err before', 'p man err after',
                   'p2', 'n_acq',
-                  'guide_count', 'n_good_guide']
-    formats = {'t_ccd': '.2f', 'one_shot_before': '.0f',
-               'one_shot_after': '.0f', 'p2': '.2f',
-               'guide_count': '.1f'}
-    print_table = defaultdict(list)
-    for col in print_cols:
-        for row in metrics:
-            if col in formats:
-                print_table[col].append(f'{row[col]:{formats[col]}}')
-            else:
-                print_table[col].append(str(row[col]))
+                  'guide count', 'n good guide']
+    formats = {'t_ccd': '.2f', 'p man err before': '.2f', 'p man err after': '.2f',
+               'man angle before': '.0f', 'man angle after': '.0f',
+               'one shot before': '.0f',
+               'one shot after': '.0f', 'p2': '.2f',
+               'guide count': '.1f'}
 
-    all_warns = []
-    # And this whole thing in a function
-    for row_idx in range(len(metrics)):
-        row_warns = []
-        row = metrics[row_idx]
-        for ctype in ['FID', 'GUIDE', 'ACQ']:
-            if row[f'{ctype.lower()}_warn']:
-                row_warns.append((ctype, warn_maps[row_idx][ctype]))
-        if not np.isnan(row['t_ccd']) and not t_ccd_ok(row):
-            row_warns.append(('T_CCD', warn_maps[row_idx]['T_CCD']))
-            print_table['t_ccd'][row_idx] = (
-                f'<font color="red">{print_table["t_ccd"][row_idx]}</font>')
-        if not man_ok(row['one_shot_before'], row['p_man_err_before']):
-            row_warns.append(('MANVR', warn_maps[row_idx]['MANVR']))
-            print_table['one_shot_before'][row_idx] = (
-                f'<font color="red">{print_table["one_shot_before"][row_idx]}</font>')
-        if not man_ok(row['one_shot_after'], row['p_man_err_after']):
-            row_warns.append(('MANVR', warn_maps[row_idx]['MANVR']))
-            print_table['one_shot_after'][row_idx] = (
-                f'<font color="red">{print_table["one_shot_after"][row_idx]}</font>')
-        if not kalman_ok(row):
-            row_warns.append(('KAL', warn_maps[row_idx]['KAL']))
-        if row['obsid'] in HI_BGD['obsid']:
-            row_warns.append(('HI_BGD', warn_maps[row_idx]['HI_BGD']))
-        href_warns = []
-        for w in row_warns:
-            href_warns.append(f"<A HREF='{w[1]}'>{w[0]}</A>")
-        all_warns.append(','.join(href_warns))
-        
-    print_table['warns'] = all_warns
-    return Table(print_table)
+    print_table = {}
+    # Add some long URL fields to the dictionary before making an astropy.table
+    print_table['obsid'] = (
+        f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>")
+    print_table['mica'] = (
+        f"<A HREF='{dat['mica']}'>mica</A>")
+    print_table['dash'] = (
+        f"<A HREF='{dat['dash']}'>dash</A>")
+    print_table['start'] = dat['start']
+
+    # Add the rest
+    for col in print_cols:
+        print_table[col] = dat[col]
+
+    print_table = Table([print_table])
+    print_table['warns'] = href_warns
+
+    # Save status and CSS formatting in a table
+    td_class = {}
+    for name in print_cols:
+        td_classes = []
+        if name in status and status[name]:
+            td_classes.append('bad')
+        if name in print_table.colnames and print_table[name].dtype.kind in ('i', 'f'):
+            td_classes.append('align-right')
+        td_class[name] = ' '.join(td_classes)
+
+    # Update the formats of the columns to be more stringy
+    for col in print_cols:
+        if col in formats:
+            print_table[col] = f'{dat[col]:{formats[col]}}'
+        else:
+            print_table[col] = str(dat[col])
+
+    # Put in order
+    print_table = print_table[['obsid', 'start', 'dash', 'mica']
+                              + print_cols + ['warns']]
+    return print_table, td_class
 
 
 def main():
-    # these globals are cop-outs but ...
+    opt = get_options()
+    outdir = opt.out
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
 
+    stop = opt.stop
+    if opt.start is None:
+        start = DateTime() - 7
+    else:
+        start = opt.start
+
+    # these globals are cop-outs but ...
     global ACQ_STATS
     ACQ_STATS = mica.stats.acq_stats.get_stats()
     global GUIDE_STATS
     GUIDE_STATS = mica.stats.guide_stats.get_stats()
     global HI_BGD
-    HI_BGD = Table.read('/proj/sot/ska/data/aca_hi_bgd_mon/bgd_events.dat',
+    HI_BGD = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
                         format='ascii')
     global MP_STARCATS
     MP_STARCATS = get_all_starcats()
 
+    manvrs = events.manvrs.filter(start=start, stop=stop)
 
-    # should get start time from last processed for continuity
-    start = DateTime() - 7
-    manvrs = events.manvrs.filter(start=start)
+    file_dir = Path(__file__).parent
+    detail_template = Template(open(
+        file_dir / "detail_template.html", 'r').read())
 
-
+    logger = logging.getLogger('aca_weekly_report')
     metrics = []
-    warn_maps = []
+    obss = []
+    metric_rows = []
+    markups = []
     for manvr in manvrs:
         if manvr.acq_start is None:
-            print(f"Skip {manvr.obsid} has no acquisition")
+            logger.info(f"Skip {manvr.obsid} has no acquisition")
             continue
-        print(manvr.start, manvr.stop, manvr.obsid)
-        metric, warn_map = get_obsmetrics(manvr)
-        metrics.append(metric)
-        warn_maps.append(warn_map)
+        logger.debug(manvr.start, manvr.stop, manvr.obsid)
+        try:
+            metric, obs_cats, warn_map = get_obsmetrics(manvr)
+            metric_row, markup = make_metric_print(metric, warn_map)
+            obss.append(obs_cats)
+            metrics.append(metric)
+            metric_rows.append(metric_row)
+            markups.append(markup)
+        except Exception:
+            logger.warn(f"Skip {manvr.obsid} at {manvr.start}.  Error processing")
 
-    metrics = Table(metrics)
+    markups = Table(markups)
+    metric_print = vstack(metric_rows)
 
-    metric_print = make_metric_print(metrics, warn_maps)
+    for i, row in enumerate(metric_print):
+        obs_page = detail_template.render(
+            obs=row,
+            obs_cats=obss[i])
+        f = open(
+            os.path.join(outdir,
+                         f'obs_{metrics[i]["obsid"]}_{metrics[i]["start"]}.html'), "w")
+        f.write(obs_page)
+        f.close()
 
-    outdir = "."
-    file_dir = Path(__file__).parent
+    for col in ['one shot after', 'man angle after', 'p man err after',
+                'man angle before', 'p man err before']:
+        metric_print.remove_column(col)
+
     template = Template(open(file_dir / "top_level_template.html", 'r').read())
-    page = template.render(metrics=metric_print)
-    f = open(os.path.join(outdir, "index_draft.html"), "w")
+    page = template.render(metrics=metric_print, markup=markups)
+    f = open(os.path.join(outdir, "index.html"), "w")
     f.write(page)
     f.close()
-
-    #reports = 'newreports.dat'
-    #Table(metrics).write(reports)
 
 
 if __name__ == '__main__':
     main()
-
-
-
-
