@@ -279,6 +279,18 @@ def check_cat_data(cat, warn_funcs, warn_cols):
             else:
                 print_cat[name][row_idx] = f'{cat[name][row_idx]}'
 
+    # Substitute in links to kadi for the ids for stars (which I think will be greater
+    # than 20)
+    id_strs = []
+    for row in cat:
+        if row['id'] > 20:
+            id_strs.append(
+                f'<A HREF="https://kadi.cfa.harvard.edu/star_hist/?agasc_id={row["id"]}">'
+                + f'{row["id"]}</A>')
+        else:
+            id_strs.append(str(row['id']))
+    print_cat['id'] = id_strs
+
     # Make a status dictionary (just bad status for now).
     has_warn = False
     status = defaultdict(list)
