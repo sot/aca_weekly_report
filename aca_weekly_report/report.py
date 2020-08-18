@@ -45,6 +45,9 @@ def get_options():
                         help="start time for search for manvrs for report")
     parser.add_argument("--stop",
                         help="stop time for search for manvrs for report")
+    parser.add_argument("--days-back",
+                        default=10,
+                        help="number of days back from 'now' for standard report (default 10)")
     opt = parser.parse_args()
     return opt
 
@@ -477,7 +480,7 @@ def main():
 
     stop = opt.stop
     if opt.start is None:
-        start = DateTime() - 7
+        start = DateTime() - opt.days_back
     else:
         start = opt.start
 
