@@ -53,6 +53,12 @@ def get_options():
 
 
 def get_all_starcats():
+    """
+    Get a table of the times all commanded star catalogs and the source mp_dir for the mission
+    from the beginning of the kadi cmds and cmd_states tables.
+
+    :returns: astropy Table
+    """
     with tables.open_file(Path(kadi.paths.DATA_DIR()) / 'cmds.h5', 'r') as h5:
         all_cmds = Table(h5.root.data[:])
     kadi_starcats = all_cmds[all_cmds['type'] == 'MP_STARCAT']
@@ -77,6 +83,13 @@ def man_ok(one_shot, p_man_err):
 
 
 def get_proseco_catalog(manvr):
+    """
+    Find and load (from the mission planning pkl) the proseco star catalog commanded
+    before the end of the supplied manvr.
+
+    :param manvr: kadi manvr event
+    :returns: proseco star ACACatalogTable
+    """
     mp_starcat = MP_STARCATS[MP_STARCATS['date'] <= manvr.stop][-1]
     pfiles = sorted((MP_DIR / mp_starcat['mp_dir'][1:] / 'output').glob('*proseco.pkl.gz'))
     if len(pfiles) == 1:
@@ -96,6 +109,12 @@ def get_proseco_catalog(manvr):
 
 
 def get_proseco_data(pcat):
+    """
+    Extra proseco predictions about guide and acq success and the expected temperatures.
+
+    :param pcat: proseco ACACatalogTable
+    :returns: dictionary with p2, guide_count, and the predicted t_ccd_acq and t_ccd_guide
+    """
     if hasattr(pcat, 'acqs'):
         p2 = -np.log10(pcat.acqs.calc_p_safe())
         pcar = pcat.get_review_table()
@@ -114,6 +133,13 @@ def get_proseco_data(pcat):
 
 
 def get_fid_data(pcat):
+    """
+    Fetch the fid tracking metrics from the Sybase track stats table and combine with the
+    proseco fid catalog information (which has a spoiler_score / prediction of amount of spoiling).
+
+    :param pcat: proseco ACACatalogTable
+    :returns: Table with fid data including expected and observed values
+    """
     if len(pcat.fids) == 0:
         return []
     with Ska.DBI.DBI(dbi='sybase', server='sybase', user='aca_read') as db:
@@ -132,6 +158,13 @@ def get_fid_data(pcat):
 
 
 def get_acq_data(pcat):
+    """
+    Fetch the acq success metrics from mica acq stats table and combine with the
+    proseco acq catalog information (which has p_acq).
+
+    :param pcat: proseco ACACatalogTable
+    :returns: Table with acq data including expected (proseco) and observed values
+    """
     obs_acq_stats = Table(ACQ_STATS[ACQ_STATS['obsid'] == pcat.obsid])[
         'agasc_id', 'acqid', 'mag_obs', 'dy', 'dz', 'cdy', 'cdz', 'sat_pix', 'ion_rad']
     obs_acq_stats.rename_column('agasc_id', 'id')
@@ -154,6 +187,13 @@ def get_acq_anoms(acqs):
 
 
 def get_guide_data(pcat):
+    """
+    Fetch the guide success metrics from mica guide stats table and combine with the
+    proseco guide catalog information.
+
+    :param pcat: proseco ACACatalogTable
+    :returns: Table with guide data including expected (proseco) and observed values
+    """
     guides = pcat.guides.copy()
     guides = guides['id', 'slot', 'yang', 'zang', 'mag']
     global GUIDE_STATS
@@ -171,6 +211,13 @@ def get_guide_data(pcat):
 
 
 def get_max_tccd(start, stop):
+    """
+    Get the max AACCCDPT over the interval.
+
+    :param start: start time of interval
+    :param stop: stop time of interval
+    :returns: max value from fetch or np.nan if data not available
+    """
     if stop is None or DateTime(stop).secs > get_time_range('AACCCDPT')[1]:
         return np.nan
     else:
@@ -178,6 +225,14 @@ def get_max_tccd(start, stop):
 
 
 def get_manvr_data(manvr):
+    """
+    Calculate likelihood of one shot from proseco's get_p_man_err and include that, the manvr
+    angles before and after, and the one shots before and after in a dictionary for use in
+    the report.
+
+    :param manvr: kadi manvr to the dwell being reported upon
+    :returns: dictionary with maneuver observed quantities and probability of one shot size
+    """
     p_man_err_before = get_p_man_err(manvr.one_shot,
                                      manvr.angle)
     if manvr.get_next() is False:
@@ -202,6 +257,14 @@ def kalman_ok(kalman_data):
 
 
 def get_kalman_data(manvr):
+    """
+    Duplicate the kalman_watch calculation to look for intervals of low AOKALSTR.
+    This searches over the dwell or dwells associated with the manvr until the next
+    manvr start.
+
+    :param manvr: kadi manvr
+    :returns: dictionary with longest low kalman interval and lowest number of kal stars
+    """
     kalman_data = {'consec_lt_two': 0,
                    'min_kalstr': np.nan}
     trange = get_time_range('AOKALSTR')
@@ -269,6 +332,20 @@ def get_n_bad_fids(fids):
 
 
 def check_cat_data(cat, warn_funcs, warn_cols):
+    """
+    Create string-ified version of the table for use in the detailed report.
+    Run row-based checks on a submitted acq, guide, or fid table.
+    Make a formatting/status table based on the checks.
+
+    There is some duplication with the code to make the top-level formatted table.
+
+    :param cat: astropy table of fid, guide, or acq data
+    :param warn_funcs: array of functions to be run as tests on the rows of the table
+    :param warn_cols: columns to mark as "red" on failure of the function/tests in
+                      warn_funcs.  warn_funcs and warn_cols should be associated 1-to-1.
+
+    :returns: string-ified catalog table, markup/formatting table, boolean status on any fail
+    """
     if len(cat) == 0:
         return Table(), Table(), False
     print_cat = Table(np.zeros((len(cat), len(cat.colnames))).astype(str),
@@ -303,7 +380,7 @@ def check_cat_data(cat, warn_funcs, warn_cols):
                 status[name].append(row_idx)
                 has_warn = True
 
-    # Save status and CSS formating in a table
+    # Save status and CSS formatting in a table
     td_class = Table()
     for name in cat.colnames:
         td_classes_list = []
@@ -319,7 +396,15 @@ def check_cat_data(cat, warn_funcs, warn_cols):
     return print_cat, td_class, has_warn
 
 
-def get_and_check_cats(pcat, strobs):
+def get_and_check_cats(pcat):
+    """
+    Fetch the catalogs and observed data.
+    Run the code to make formatted and marked up tables from that data.
+    Return top level status and all the individual tables in dictionaries.
+
+    :param pcat: proseco ACACatalogTable
+    :returns: dict of top level catalog status items, dict of all the catalogs and markup
+    """
     cat_data = {}
     fid_data = get_fid_data(pcat)
     cats = {}
@@ -359,6 +444,15 @@ def t_ccd_ok(dat):
 
 
 def get_obsmetrics(manvr):
+    """
+    For the given maneuver, get the associated catalogs, the observed quantities at acquisition
+    and over the dwell, and return dictionaries describing everything.
+
+    :param manvr: kadi manvr
+    :returns: dict of all top-level obs/manvr metrics,
+              dict of the proseco catalogs and observed quantities on each row,
+              dict associating potential warnings with links for this obs/manvr
+    """
     metric = {'obsid': manvr.obsid,
               'start': manvr.acq_start}
     if manvr.next_nman_start is not False:
@@ -372,7 +466,7 @@ def get_obsmetrics(manvr):
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
     strobs = f'{obsid:05d}'
-    cat_data, cats = get_and_check_cats(pcat, strobs)
+    cat_data, cats = get_and_check_cats(pcat)
     for dat in (manvr_data, proseco_data, kal_data, cat_data):
         metric.update(dat)
 
@@ -399,7 +493,14 @@ def get_obsmetrics(manvr):
 
 
 def make_metric_print(dat, warn_map):
+    """
+    For the data/dictionary for a given obs/manvr, run some checks, and get together the pieces
+    for a formatted table.
 
+    :param dat: dictionary with just about eveyrthing for the obs/manvr
+    :param warn_map: dictionary with mapping concerns/warning to hopefully relevant links
+    :returns: astropy Table of string-ified content, Table of markup/formatting
+    """
     # Make a status dictionary (just bad status for now).
     status = {}
     end_warns = []
@@ -473,6 +574,10 @@ def make_metric_print(dat, warn_map):
 
 
 def main():
+    """
+    Run data fetching over a time interval and make aca_weekly_reports for the obs/manvrs in
+    in the interval.
+    """
     opt = get_options()
     outdir = opt.out
     if not os.path.exists(outdir):
