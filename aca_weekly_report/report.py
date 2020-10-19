@@ -472,7 +472,7 @@ def get_obsmetrics(manvr):
 
     links = {'detail_url': f'./obs_{metric["obsid"]}_{metric["start"]}.html',
              'dash':
-             f'https://icxc.cfa.harvard.edu/aspect/centroid_dashboard/{strobs[0:2]}/{strobs}/',
+             f'https://icxc.cfa.harvard.edu/aspect/centroid_reports/{strobs[0:2]}/{strobs}/',
              'mica':
              f'https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/'}
 
