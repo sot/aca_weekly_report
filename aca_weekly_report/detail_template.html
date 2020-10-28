@@ -1,0 +1,56 @@
+<HTML>
+<HEAD>
+<STYLE>
+table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 3px solid black;
+}
+
+th, td {
+    padding: 5px;
+    border: 1px solid black;
+}
+
+td.bad {
+    color: red;
+}
+
+td.align-right {
+  text-align: right;
+}
+</STYLE>
+</HEAD>
+<BODY>
+
+<TABLE border=1>
+{% for name in obs.colnames %}
+<TR><TD>{{ name }}</TD><TD>{{ obs[name] }}</TD></TR>
+{% endfor %}
+</TABLE>
+
+
+{% for type in ['acq', 'guide', 'fid'] %}
+{% set cat = obs_cats[type]['table'] %}
+{% set cat_tds = obs_cats[type]['markup'] %}
+{% if cat|length > 0 %}
+<H1>{{ obs_cats[type]['name'] }}</H1>
+<TABLE border=1>
+<TR>
+{% for name in cat.colnames -%}
+<TH>{{ name }}</TH>
+{% endfor -%}
+</TR>
+{% for ii in range(cat|length) -%}
+<TR>
+{% for name in cat.colnames -%}
+<TD {% if cat_tds[name][ii] %} class="{{ cat_tds[name][ii] }}" {% endif %}>{{ cat[name][ii] -}}</TD>
+{% endfor -%}
+</TR>
+{% endfor -%}
+</TABLE>
+{% endif %}
+{% endfor %}
+
+</BODY>
+</HTML>

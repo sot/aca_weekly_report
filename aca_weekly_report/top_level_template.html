@@ -1,0 +1,78 @@
+<HTML>
+<HEAD>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/js/jquery.stickytableheaders.js"></script>
+<script src="https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/js/jquery.tablesorter.js"></script>
+<script>
+  $(document).ready(function () {
+  // initialize stickyTableHeaders _after_ tablesorter
+  $(".tablesorter").tablesorter();
+  $("table").stickyTableHeaders();
+  });
+  </script>
+
+<STYLE>
+
+table.tablesorter thead tr .header
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/bg.gif);
+background-repeat: no-repeat;
+background-position: center right;
+padding-right: 20px;
+cursor: pointer;
+}
+
+table.tablesorter thead tr .headerSortUp
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/asc.gif);
+}
+table.tablesorter thead tr .headerSortDown
+{
+background-image: url(https://cxc.cfa.harvard.edu/mta/ASPECT/StickyTableHeaders/demo/img/desc.gif);
+}
+table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp
+{
+color: #000;
+}
+table th { background-color: white; }
+
+table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 3px solid black;
+}
+
+th, td {
+    padding: 5px;
+    border: 1px solid black;
+}
+
+td.bad {
+    color: red;
+}
+
+td.align-right {
+  text-align: right;
+}
+</STYLE>
+
+</HEAD>
+<BODY>
+
+<H1>Weekly Report</H1>
+
+<table border=1 class="tableWithFloatingHeader tablesorter">
+<thead><tr>{% for name in metrics.colnames %}
+<th>{{ name }}</th>{% endfor %}</tr>
+{% for ii in range(metrics|length) -%}
+<tr></thead>
+{% for name in metrics.colnames -%}
+<td {% if name in markup.colnames and markup[name][ii] 
+%} class="{{ markup[name][ii] }}" {% endif %}>{{ metrics[name][ii] -}}</td>
+{% endfor -%}
+</tr>
+{% endfor %}
+</table>
+
+</BODY>
+</HTML>
