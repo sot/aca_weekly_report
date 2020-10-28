@@ -22,6 +22,8 @@ setup(name='aca_weekly_report',
       author_email='jconnelly@cfa.harvard.edu',
       packages=['aca_weekly_report'],
       package_data={'aca_weekly_report': ['*template*html']},
+      include_package_data=True,
+      data_files=data_files,
       license=("New BSD/3-clause BSD License\nCopyright (c) 2019"
                " Smithsonian Astrophysical Observatory\nAll rights reserved."),
       use_scm_version=True,
@@ -29,5 +31,5 @@ setup(name='aca_weekly_report',
       entry_points=entry_points,
       zip_safe=False,
       tests_require=['pytest'],
-      cmdclass=cmdclass, install_requires=[]
+      cmdclass=cmdclass,
       )
