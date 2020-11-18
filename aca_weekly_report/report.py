@@ -584,11 +584,11 @@ def main():
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
-    stop = opt.stop
+    stop = DateTime(opt.stop)
     if opt.start is None:
-        start = DateTime() - opt.days_back
+        start = DateTime(-opt.days_back)
     else:
-        start = opt.start
+        start = DateTime(opt.start)
 
     # these globals are cop-outs but ...
     global ACQ_STATS
