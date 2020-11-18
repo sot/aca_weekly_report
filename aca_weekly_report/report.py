@@ -47,7 +47,7 @@ def get_options():
                         help="stop time for search for manvrs for report")
     parser.add_argument("--days-back",
                         default=10,
-                        type=int,
+                        type=float,
                         help="number of days back from 'now' for standard report (default 10)")
     opt = parser.parse_args()
     return opt
