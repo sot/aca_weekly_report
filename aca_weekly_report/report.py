@@ -586,7 +586,7 @@ def main():
 
     stop = DateTime(opt.stop)
     if opt.start is None:
-        start = DateTime(-opt.days_back)
+        start = DateTime() - opt.days_back
     else:
         start = DateTime(opt.start)
 
