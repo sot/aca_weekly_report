@@ -47,6 +47,7 @@ def get_options():
                         help="stop time for search for manvrs for report")
     parser.add_argument("--days-back",
                         default=10,
+                        type=float,
                         help="number of days back from 'now' for standard report (default 10)")
     opt = parser.parse_args()
     return opt
@@ -583,11 +584,11 @@ def main():
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
-    stop = opt.stop
+    stop = DateTime(opt.stop)
     if opt.start is None:
         start = DateTime() - opt.days_back
     else:
-        start = opt.start
+        start = DateTime(opt.start)
 
     # these globals are cop-outs but ...
     global ACQ_STATS
