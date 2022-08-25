@@ -9,7 +9,7 @@ except ImportError:
     cmdclass = {}
 
 if "--user" not in sys.argv:
-    share_path = os.path.join(sys.prefix, "share", "aca_weekly_report")
+    share_path = os.path.join("share", "aca_weekly_report")
     data_files = [(share_path, ['task_schedule.cfg'])]
 else:
     data_files = None
