@@ -269,7 +269,9 @@ def get_kalman_data(manvr):
     kalman_data = {'consec_lt_two': 0,
                    'min_kalstr': np.nan}
     trange = get_time_range('AOKALSTR')
-    if manvr.get_next() is False or trange[1] < DateTime(manvr.get_next().start).secs:
+    if (manvr.guide_start is None
+        or manvr.get_next() is False
+            or trange[1] < DateTime(manvr.get_next().start).secs):
         return kalman_data
     dat = fetch_sci.Msidset(['AOKALSTR', 'AOPCADMD', 'AOACASEQ'],
                             manvr.guide_start,
@@ -625,7 +627,7 @@ def main():
             metric_rows.append(metric_row)
             markups.append(markup)
         except Exception:
-            logger.warn(f"Skip {manvr.obsid} at {manvr.start}.  Error processing")
+            logger.warning(f"Skip {manvr.obsid} at {manvr.start}.  Error processing")
 
     markups = Table(markups)
     metric_print = vstack(metric_rows)
