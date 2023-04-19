@@ -13,19 +13,20 @@ import pickle
 import gzip
 from astropy.table import Table, join, vstack
 from collections import defaultdict
-import tables
 import logging
 
 import Ska.DBI
 from Chandra.Time import DateTime
 import kadi.paths
 from kadi import events
+import kadi.commands
 from Ska.engarchive import fetch_sci
 from Ska.engarchive.fetch import get_time_range
 from Ska.engarchive.utils import logical_intervals
 import mica.starcheck
 import mica.stats.acq_stats
 import mica.stats.guide_stats
+from mica.utils import load_name_to_mp_dir
 from proseco.acq import get_p_man_err
 
 SKA = os.environ['SKA']
@@ -60,22 +61,15 @@ def get_all_starcats():
 
     :returns: astropy Table
     """
-    with tables.open_file(Path(kadi.paths.DATA_DIR()) / 'cmds.h5', 'r') as h5:
-        all_cmds = Table(h5.root.data[:])
-    kadi_starcats = all_cmds[all_cmds['type'] == 'MP_STARCAT']
+    starcats = kadi.commands.get_cmds(type="MP_STARCAT")
 
-    with Ska.DBI.DBI(
-            dbi='sqlite',
-            server=Path(SKA) / 'data' / 'cmd_states' / 'cmd_states.db3') as db:
-        timelines = Table(db.fetchall("select * from timeline_loads"))
-    timelines.rename_column('id', 'timeline_id')
+    # In case we ever include manually-commanded star catalogs, filter those out.
+    starcats = starcats[starcats["source"] != "CMD_EVT"]
 
-    kadi_starcats['date'] = kadi_starcats['date'].astype(str)
-    mp_starcats = join(kadi_starcats['date', 'timeline_id'],
-                       timelines['timeline_id', 'mp_dir'],
-                       keys=['timeline_id'],
-                       )['date', 'mp_dir']
-    mp_starcats.sort('date')
+    # Translate from e.g. DEC2506C to /2006/DEC2506/oflsc/.
+    mp_dirs = [load_name_to_mp_dir(sc["source"]) for sc in starcats]
+    mp_starcats = Table([starcats["date"], mp_dirs], names=["date", "mp_dir"])
+
     return mp_starcats
 
 
