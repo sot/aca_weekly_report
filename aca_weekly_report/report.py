@@ -137,7 +137,7 @@ def get_fid_data(pcat):
     """
     if len(pcat.fids) == 0:
         return []
-    with Sqsh(dbi='sybase', server='sybase', user='aca_read') as db:
+    with Sqsh(dbi='sybase', server='sybase', database='aca', user='aca_read') as db:
         fids = db.fetchall(
             f"select * from trak_stats_data where obsid = {pcat.obsid} and type = 'FID'")
     if len(fids) > 0:
