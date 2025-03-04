@@ -1,4 +1,4 @@
-# coding: utf-8
+# coding: utf-8A
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 """
@@ -451,7 +451,8 @@ def get_obsmetrics(manvr):
               dict associating potential warnings with links for this obs/manvr
     """
     metric = {'obsid': manvr.obsid,
-              'start': manvr.acq_start}
+              'start': manvr.acq_start,
+              'kalman_start': manvr.kalman_start}
     if manvr.next_nman_start is not False:
         metric['t_ccd'] = get_max_tccd(manvr.acq_start, manvr.next_nman_start)
     else:
@@ -463,6 +464,8 @@ def get_obsmetrics(manvr):
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
     strobs = f'{obsid:05d}'
+    dwell_start = manvr.kalman_start
+    year = CxoTime(dwell_start).date[0:4]
     cat_data, cats = get_and_check_cats(pcat)
     for dat in (manvr_data, proseco_data, kal_data, cat_data):
         metric.update(dat)
@@ -478,7 +481,7 @@ def get_obsmetrics(manvr):
         'KAL': 'http://cxc.cfa.harvard.edu/mta/ASPECT/kalman_watch/',
         'ANOM': metric['mica'],
         'HI_BGD':
-        f'https://cxc.cfa.harvard.edu/mta/ASPECT/aca_hi_bgd_mon/events/obs_{strobs}/index.html',
+        f'https://cxc.cfa.harvard.edu/mta/ASPECT/aca_hi_bgd_mon/events/{year}/dwell_{dwell_start}/index.html',
         'MANVR': metric['dash'],
         'ACQ': metric['detail_url'],
         'GUIDE': metric['detail_url'],
@@ -514,7 +517,7 @@ def make_metric_print(dat, warn_map):
         status['one shot after'] = True
     if not kalman_ok(dat):
         end_warns.append(('KAL', warn_map['KAL']))
-    if dat['obsid'] in HI_BGD['obsid']:
+    if dat['kalman_start'] in HI_BGD['dwell_datestart']:
         end_warns.append(('HI_BGD', warn_map['HI_BGD']))
     href_warns = []
     href_warns = ','.join([f"<A HREF='{w[1]}'>{w[0]}</A>" for w in end_warns])
