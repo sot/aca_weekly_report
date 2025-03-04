@@ -17,6 +17,7 @@ import logging
 
 from ska_dbi.sqsh import Sqsh
 from Chandra.Time import DateTime
+from cxotime import CxoTime
 import kadi.paths
 from kadi import events
 import kadi.commands
