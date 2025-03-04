@@ -1,4 +1,4 @@
-# coding: utf-8
+# coding: utf-8AA
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 """
@@ -574,6 +574,20 @@ def make_metric_print(dat, warn_map):
     return print_table, td_class
 
 
+def get_hi_bgd_events():
+    bg_events = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
+                        format='ascii')
+    # Filter for just significant events - but I can't use the code that does this from aca_hi_bgd
+    # because that isn't actually installed
+    bg_notes = np.array([note.strip() for note in bg_events["notes"]])
+    ok = ~np.in1d(bg_events["obsid"], [0, -1]) & (
+        (bg_events["n_slots"] >= 5)
+        | (bg_events["slot_seconds"] >= 60)
+        | (bg_notes != "")
+    )
+    return bg_events[ok]
+
+
 def main():
     """
     Run data fetching over a time interval and make aca_weekly_reports for the obs/manvrs in
@@ -595,9 +609,10 @@ def main():
     ACQ_STATS = mica.stats.acq_stats.get_stats()
     global GUIDE_STATS
     GUIDE_STATS = mica.stats.guide_stats.get_stats()
+
     global HI_BGD
-    HI_BGD = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
-                        format='ascii')
+    HI_BGD = get_hi_bgd_events()
+
     global MP_STARCATS
     MP_STARCATS = get_all_starcats()
 
