@@ -577,15 +577,7 @@ def make_metric_print(dat, warn_map):
 def get_hi_bgd_events():
     bg_events = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
                         format='ascii')
-    # Filter for just significant events - but I can't use the code that does this from aca_hi_bgd
-    # because that isn't actually installed
-    bg_notes = np.array([note.strip() for note in bg_events["notes"]])
-    ok = ~np.in1d(bg_events["obsid"], [0, -1]) & (
-        (bg_events["n_slots"] >= 5)
-        | (bg_events["slot_seconds"] >= 60)
-        | (bg_notes != "")
-    )
-    return bg_events[ok]
+    return bg_events[bg_events["has_report"]]
 
 
 def main():
