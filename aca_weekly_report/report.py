@@ -69,7 +69,7 @@ def get_all_starcats():
 
     # Translate from e.g. DEC2506C to /2006/DEC2506/oflsc/.
     mp_dirs = [load_name_to_mp_dir(sc["source"]) for sc in starcats]
-    mp_starcats = Table([starcats["date"], mp_dirs], names=["date", "mp_dir"])
+    mp_starcats = Table([starcats["date"], mp_dirs, starcats["source"]], names=["date", "mp_dir", "load_name"])
 
     return mp_starcats
 
@@ -99,6 +99,8 @@ def get_proseco_catalog(manvr):
         # but I've added a minute of slop/padding to the operation to grab the catalog.
         obsid = int(ptable[ptable['times'] < (DateTime(manvr.stop).secs + 60)][-1]['obsid'])
         pcat = acas[obsid]
+        pcat["meta"]["load_name"] = mp_starcat["load_name"]
+        pcat["meta"]["mp_dir"] = mp_starcat["mp_dir"]
     else:
         raise ValueError("No proseco catalog available.")
     return pcat
@@ -461,6 +463,8 @@ def get_obsmetrics(manvr):
 
     pcat = get_proseco_catalog(manvr)
     obsid = int(pcat.obsid)
+    metric["load_name"] = pcat["meta"]["load_name"]
+    metric["mp_dir"] = pcat["meta"]["mp_dir"]
     proseco_data = get_proseco_data(pcat)
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
@@ -536,6 +540,8 @@ def make_metric_print(dat, warn_map):
 
     print_table = {}
     # Add some long URL fields to the dictionary before making an astropy.table
+    print_table["load"] = (
+        f"< HREF='https://icxc.cfa.harvard.edu/mp/mplogs{dat['mp_dir']}starcheck.html'>{dat['load_name']}</A>")
     print_table['obsid'] = (
         f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>")
     print_table['mica'] = (
@@ -569,7 +575,7 @@ def make_metric_print(dat, warn_map):
             print_table[col] = str(dat[col])
 
     # Put in order
-    print_table = print_table[['obsid', 'start', 'dash', 'mica']
+    print_table = print_table[['obsid', 'start', 'load', 'dash', 'mica']
                               + print_cols + ['warns']]
     return print_table, td_class
 
