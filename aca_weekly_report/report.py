@@ -99,8 +99,8 @@ def get_proseco_catalog(manvr):
         # but I've added a minute of slop/padding to the operation to grab the catalog.
         obsid = int(ptable[ptable['times'] < (DateTime(manvr.stop).secs + 60)][-1]['obsid'])
         pcat = acas[obsid]
-        pcat["meta"]["load_name"] = mp_starcat["load_name"]
-        pcat["meta"]["mp_dir"] = mp_starcat["mp_dir"]
+        pcat.meta["load_name"] = mp_starcat["load_name"]
+        pcat.meta["mp_dir"] = mp_starcat["mp_dir"]
     else:
         raise ValueError("No proseco catalog available.")
     return pcat
@@ -463,8 +463,8 @@ def get_obsmetrics(manvr):
 
     pcat = get_proseco_catalog(manvr)
     obsid = int(pcat.obsid)
-    metric["load_name"] = pcat["meta"]["load_name"]
-    metric["mp_dir"] = pcat["meta"]["mp_dir"]
+    metric["load_name"] = pcat.meta["load_name"]
+    metric["mp_dir"] = pcat.meta["mp_dir"]
     proseco_data = get_proseco_data(pcat)
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
@@ -541,7 +541,7 @@ def make_metric_print(dat, warn_map):
     print_table = {}
     # Add some long URL fields to the dictionary before making an astropy.table
     print_table["load"] = (
-        f"< HREF='https://icxc.cfa.harvard.edu/mp/mplogs{dat['mp_dir']}starcheck.html'>{dat['load_name']}</A>")
+        f"<A HREF='https://icxc.cfa.harvard.edu/mp/mplogs{dat['mp_dir']}starcheck.html'>{dat['load_name']}</A>")
     print_table['obsid'] = (
         f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>")
     print_table['mica'] = (
