@@ -357,7 +357,7 @@ def get_n_bad_fids(fids):
         return np.count_nonzero(np.array([is_fid_poorly_tracked(fid) for fid in fids]))
 
 
-def check_cat_data(cat, warn_funcs, warn_cols): # noqa: PLR0912 too many branches
+def check_cat_data(cat, warn_funcs, warn_cols):  # noqa: PLR0912 too many branches
     """
     Create string-ified version of the catalog table for use in the detailed report.
 
@@ -527,7 +527,7 @@ def get_obsmetrics(manvr):
     return metric, cats, warn_map
 
 
-def make_metric_print(dat, warn_map): # noqa: PLR0912 too many branches
+def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
     """
     Make a formatted table for the top level report.
 
@@ -543,7 +543,7 @@ def make_metric_print(dat, warn_map): # noqa: PLR0912 too many branches
     end_warns = []
     for ctype in ["FID", "GUIDE", "ACQ"]:
         if dat[f"{ctype.lower()}_warn"]:
-            end_warns.append((ctype, warn_map[ctype])) # noqa: PERF401 use a list comp
+            end_warns.append((ctype, warn_map[ctype]))  # noqa: PERF401 use a list comp
     if not np.isnan(dat["t_ccd"]) and not t_ccd_ok(dat):
         end_warns.append(("T_CCD", warn_map["T_CCD"]))
         status["t_ccd"] = True
@@ -630,7 +630,7 @@ def get_hi_bgd_events():
     return bg_events[bg_events["has_report"]]
 
 
-def main(): # noqa: PLR0915 too many statements
+def main():  # noqa: PLR0915 too many statements
     """
     aca_weekly_report main function.
     """
@@ -646,15 +646,15 @@ def main(): # noqa: PLR0915 too many statements
         start = DateTime(opt.start)
 
     # these globals are cop-outs but ...
-    global ACQ_STATS # noqa: PLW0603 global variable ACQ_STATS
+    global ACQ_STATS  # noqa: PLW0603 global variable ACQ_STATS
     ACQ_STATS = mica.stats.acq_stats.get_stats()
-    global GUIDE_STATS # noqa: PLW0603 global variable GUIDE_STATS
+    global GUIDE_STATS  # noqa: PLW0603 global variable GUIDE_STATS
     GUIDE_STATS = mica.stats.guide_stats.get_stats()
 
-    global HI_BGD # noqa: PLW0603 global variable HI_BGD
+    global HI_BGD  # noqa: PLW0603 global variable HI_BGD
     HI_BGD = get_hi_bgd_events()
 
-    global MP_STARCATS # noqa: PLW0603 global variable MP_STARCATS
+    global MP_STARCATS  # noqa: PLW0603 global variable MP_STARCATS
     MP_STARCATS = get_all_starcats()
 
     manvrs = events.manvrs.filter(start=start, stop=stop)
