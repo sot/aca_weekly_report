@@ -16,20 +16,23 @@ else:
 
 entry_points = {'console_scripts': ['aca_weekly_report=aca_weekly_report.report:main']}
 
-setup(name='aca_weekly_report',
-      author='Jean Connelly',
-      description='make weekly report on observed/tracked metrics',
-      author_email='jconnelly@cfa.harvard.edu',
-      packages=['aca_weekly_report'],
-      package_data={'aca_weekly_report': ['*template*html']},
-      include_package_data=True,
-      data_files=data_files,
-      license=("New BSD/3-clause BSD License\nCopyright (c) 2019"
-               " Smithsonian Astrophysical Observatory\nAll rights reserved."),
-      use_scm_version=True,
-      setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
-      entry_points=entry_points,
-      zip_safe=False,
-      tests_require=['pytest'],
-      cmdclass=cmdclass,
-      )
+setup(
+    name='aca_weekly_report',
+    author='Jean Connelly',
+    description='make weekly report on observed/tracked metrics',
+    author_email='jconnelly@cfa.harvard.edu',
+    packages=['aca_weekly_report'],
+    package_data={'aca_weekly_report': ['*template*html']},
+    include_package_data=True,
+    data_files=data_files,
+    license=(
+        "New BSD/3-clause BSD License\nCopyright (c) 2019"
+        " Smithsonian Astrophysical Observatory\nAll rights reserved."
+    ),
+    use_scm_version=True,
+    setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
+    entry_points=entry_points,
+    zip_safe=False,
+    tests_require=['pytest'],
+    cmdclass=cmdclass,
+)
