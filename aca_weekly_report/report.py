@@ -475,11 +475,14 @@ def get_obsmetrics(manvr):
     for dat in (manvr_data, proseco_data, kal_data, cat_data):
         metric.update(dat)
 
-    links = {'detail_url': f'./obs_{metric["obsid"]}_{metric["start"]}.html',
-             'dash':
-             f'https://icxc.cfa.harvard.edu/aspect/centroid_reports/{strobs[0:2]}/{strobs}/',
-             'mica':
-             f'https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/'}
+    links = {
+        'detail_url': f'./obs_{metric["obsid"]}_{metric["start"]}.html',
+        'starcheck':
+            f"https://icxc.cfa.harvard.edu/mp/mplogs{metric['mp_dir']}starcheck.html#obsid{obsid}",
+        'dash':
+            f'https://icxc.cfa.harvard.edu/aspect/centroid_reports/{strobs[0:2]}/{strobs}/',
+        'mica':
+            f'https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/'}
 
     metric.update(links)
     warn_map = {
@@ -541,7 +544,7 @@ def make_metric_print(dat, warn_map):
     print_table = {}
     # Add some long URL fields to the dictionary before making an astropy.table
     print_table["load"] = (
-        f"<A HREF='https://icxc.cfa.harvard.edu/mp/mplogs{dat['mp_dir']}starcheck.html'>{dat['load_name']}</A>")
+        f"<A HREF='{dat['starcheck']}'>{dat['load_name']}</A>")
     print_table['obsid'] = (
         f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>")
     print_table['mica'] = (
