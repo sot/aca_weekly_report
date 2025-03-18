@@ -17,6 +17,7 @@ import logging
 
 from ska_dbi.sqsh import Sqsh
 from Chandra.Time import DateTime
+from cxotime import CxoTime
 import kadi.paths
 from kadi import events
 import kadi.commands
@@ -451,7 +452,8 @@ def get_obsmetrics(manvr):
               dict associating potential warnings with links for this obs/manvr
     """
     metric = {'obsid': manvr.obsid,
-              'start': manvr.acq_start}
+              'start': manvr.acq_start,
+              'kalman_start': manvr.kalman_start}
     if manvr.next_nman_start is not False:
         metric['t_ccd'] = get_max_tccd(manvr.acq_start, manvr.next_nman_start)
     else:
@@ -463,6 +465,8 @@ def get_obsmetrics(manvr):
     manvr_data = get_manvr_data(manvr)
     kal_data = get_kalman_data(manvr)
     strobs = f'{obsid:05d}'
+    dwell_start = manvr.kalman_start
+    year = CxoTime(dwell_start).date[0:4]
     cat_data, cats = get_and_check_cats(pcat)
     for dat in (manvr_data, proseco_data, kal_data, cat_data):
         metric.update(dat)
@@ -478,7 +482,7 @@ def get_obsmetrics(manvr):
         'KAL': 'http://cxc.cfa.harvard.edu/mta/ASPECT/kalman_watch/',
         'ANOM': metric['mica'],
         'HI_BGD':
-        f'https://cxc.cfa.harvard.edu/mta/ASPECT/aca_hi_bgd_mon/events/obs_{strobs}/index.html',
+        f'https://cxc.cfa.harvard.edu/mta/ASPECT/aca_hi_bgd_mon/events/{year}/dwell_{dwell_start}/index.html',
         'MANVR': metric['dash'],
         'ACQ': metric['detail_url'],
         'GUIDE': metric['detail_url'],
@@ -514,7 +518,7 @@ def make_metric_print(dat, warn_map):
         status['one shot after'] = True
     if not kalman_ok(dat):
         end_warns.append(('KAL', warn_map['KAL']))
-    if dat['obsid'] in HI_BGD['obsid']:
+    if dat['kalman_start'] in HI_BGD['dwell_datestart']:
         end_warns.append(('HI_BGD', warn_map['HI_BGD']))
     href_warns = []
     href_warns = ','.join([f"<A HREF='{w[1]}'>{w[0]}</A>" for w in end_warns])
@@ -570,6 +574,12 @@ def make_metric_print(dat, warn_map):
     return print_table, td_class
 
 
+def get_hi_bgd_events():
+    bg_events = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
+                        format='ascii')
+    return bg_events[bg_events["has_report"]]
+
+
 def main():
     """
     Run data fetching over a time interval and make aca_weekly_reports for the obs/manvrs in
@@ -591,9 +601,10 @@ def main():
     ACQ_STATS = mica.stats.acq_stats.get_stats()
     global GUIDE_STATS
     GUIDE_STATS = mica.stats.guide_stats.get_stats()
+
     global HI_BGD
-    HI_BGD = Table.read(Path(SKA) / 'data' / 'aca_hi_bgd_mon' / 'bgd_events.dat',
-                        format='ascii')
+    HI_BGD = get_hi_bgd_events()
+
     global MP_STARCATS
     MP_STARCATS = get_all_starcats()
 
