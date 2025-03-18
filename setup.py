@@ -10,19 +10,19 @@ except ImportError:
 
 if "--user" not in sys.argv:
     share_path = os.path.join("share", "aca_weekly_report")
-    data_files = [(share_path, ['task_schedule.cfg'])]
+    data_files = [(share_path, ["task_schedule.cfg"])]
 else:
     data_files = None
 
-entry_points = {'console_scripts': ['aca_weekly_report=aca_weekly_report.report:main']}
+entry_points = {"console_scripts": ["aca_weekly_report=aca_weekly_report.report:main"]}
 
 setup(
-    name='aca_weekly_report',
-    author='Jean Connelly',
-    description='make weekly report on observed/tracked metrics',
-    author_email='jconnelly@cfa.harvard.edu',
-    packages=['aca_weekly_report'],
-    package_data={'aca_weekly_report': ['*template*html']},
+    name="aca_weekly_report",
+    author="Jean Connelly",
+    description="make weekly report on observed/tracked metrics",
+    author_email="jconnelly@cfa.harvard.edu",
+    packages=["aca_weekly_report"],
+    package_data={"aca_weekly_report": ["*template*html"]},
     include_package_data=True,
     data_files=data_files,
     license=(
@@ -30,9 +30,9 @@ setup(
         " Smithsonian Astrophysical Observatory\nAll rights reserved."
     ),
     use_scm_version=True,
-    setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
+    setup_requires=["setuptools_scm", "setuptools_scm_git_archive"],
     entry_points=entry_points,
     zip_safe=False,
-    tests_require=['pytest'],
+    tests_require=["pytest"],
     cmdclass=cmdclass,
 )
