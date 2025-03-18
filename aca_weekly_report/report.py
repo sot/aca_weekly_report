@@ -4,31 +4,31 @@
 Make a report of performance during recent observations.
 """
 
-import os
 import argparse
-import numpy as np
-from jinja2 import Template
-from pathlib import Path
-import pickle
 import gzip
-from astropy.table import Table, join, vstack
-from collections import defaultdict
 import logging
+import os
+import pickle
+from collections import defaultdict
+from pathlib import Path
 
-from ska_dbi.sqsh import Sqsh
-from Chandra.Time import DateTime
-from cxotime import CxoTime
-import kadi.paths
-from kadi import events
 import kadi.commands
-from Ska.engarchive import fetch_sci
-from Ska.engarchive.fetch import get_time_range
-from Ska.engarchive.utils import logical_intervals
+import kadi.paths
 import mica.starcheck
 import mica.stats.acq_stats
 import mica.stats.guide_stats
+import numpy as np
+from astropy.table import Table, join, vstack
+from Chandra.Time import DateTime
+from cxotime import CxoTime
+from jinja2 import Template
+from kadi import events
 from mica.utils import load_name_to_mp_dir
 from proseco.acq import get_p_man_err
+from Ska.engarchive import fetch_sci
+from Ska.engarchive.fetch import get_time_range
+from Ska.engarchive.utils import logical_intervals
+from ska_dbi.sqsh import Sqsh
 
 SKA = os.environ["SKA"]
 MP_STARCATS = None
@@ -390,7 +390,7 @@ def check_cat_data(cat, warn_funcs, warn_cols):
     has_warn = False
     status = defaultdict(list)
     for row_idx, row in enumerate(cat):
-        for func, name in zip(warn_funcs, warn_cols):
+        for func, name in zip(warn_funcs, warn_cols, strict=False):
             if func(row):
                 status[name].append(row_idx)
                 has_warn = True
