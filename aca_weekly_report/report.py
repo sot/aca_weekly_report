@@ -55,6 +55,8 @@ def get_options():
 
 def get_all_starcats():
     """
+    Get all kadi command starcats.
+
     Get a table of the times all commanded star catalogs and the source mp_dir for the mission
     from the beginning of the kadi cmds and cmd_states tables.
 
@@ -81,6 +83,8 @@ def man_ok(one_shot, p_man_err):
 
 def get_proseco_catalog(manvr):
     """
+    Get proseco star catalog commanded before the end of the supplied manvr.
+
     Find and load (from the mission planning pkl) the proseco star catalog commanded
     before the end of the supplied manvr.
 
@@ -141,8 +145,10 @@ def get_proseco_data(pcat):
 
 def get_fid_data(pcat):
     """
-    Fetch the fid tracking metrics from the Sybase track stats table and combine with the
-    proseco fid catalog information (which has a spoiler_score / prediction of amount of spoiling).
+    Fetch the fid tracking metrics from the Sybase track stats table.
+
+    Combine the tracking metrics with the proseco fid catalog information
+    (which has a spoiler_score / prediction of amount of spoiling).
 
     :param pcat: proseco ACACatalogTable
     :returns: Table with fid data including expected and observed values
@@ -169,8 +175,9 @@ def get_fid_data(pcat):
 
 def get_acq_data(pcat):
     """
-    Fetch the acq success metrics from mica acq stats table and combine with the
-    proseco acq catalog information (which has p_acq).
+    Fetch the acq success metrics from mica acq stats table.
+
+    Combine the mica metrics with the proseco acq catalog information (which has p_acq).
 
     :param pcat: proseco ACACatalogTable
     :returns: Table with acq data including expected (proseco) and observed values
@@ -198,8 +205,9 @@ def get_acq_anoms(acqs):
 
 def get_guide_data(pcat):
     """
-    Fetch the guide success metrics from mica guide stats table and combine with the
-    proseco guide catalog information.
+    Fetch the guide success metrics from mica guide stats table.
+
+    Combine the metrics with the proseco guide catalog information.
 
     :param pcat: proseco ACACatalogTable
     :returns: Table with guide data including expected (proseco) and observed values
@@ -237,9 +245,10 @@ def get_max_tccd(start, stop):
 
 def get_manvr_data(manvr):
     """
-    Calculate likelihood of one shot from proseco's get_p_man_err and include that, the manvr
-    angles before and after, and the one shots before and after in a dictionary for use in
-    the report.
+    Calculate likelihood of a one shot from proseco's get_p_man_err.
+
+    Include that, the manvr angles before and after, and the one shots before and
+    after in a dictionary for use in the report.
 
     :param manvr: kadi manvr to the dwell being reported upon
     :returns: dictionary with maneuver observed quantities and probability of one shot size
@@ -270,6 +279,7 @@ def kalman_ok(kalman_data):
 def get_kalman_data(manvr):
     """
     Duplicate the kalman_watch calculation to look for intervals of low AOKALSTR.
+
     This searches over the dwell or dwells associated with the manvr until the next
     manvr start.
 
@@ -346,7 +356,8 @@ def get_n_bad_fids(fids):
 
 def check_cat_data(cat, warn_funcs, warn_cols):
     """
-    Create string-ified version of the table for use in the detailed report.
+    Create string-ified version of the catalog table for use in the detailed report.
+
     Run row-based checks on a submitted acq, guide, or fid table.
     Make a formatting/status table based on the checks.
 
@@ -414,6 +425,7 @@ def check_cat_data(cat, warn_funcs, warn_cols):
 def get_and_check_cats(pcat):
     """
     Fetch the catalogs and observed data.
+
     Run the code to make formatted and marked up tables from that data.
     Return top level status and all the individual tables in dictionaries.
 
@@ -456,6 +468,8 @@ def t_ccd_ok(dat):
 
 def get_obsmetrics(manvr):
     """
+    Get all the metrics for this observation/maneuver.
+
     For the given maneuver, get the associated catalogs, the observed quantities at acquisition
     and over the dwell, and return dictionaries describing everything.
 
@@ -512,6 +526,8 @@ def get_obsmetrics(manvr):
 
 def make_metric_print(dat, warn_map):
     """
+    Make a formatted table for the top level report.
+
     For the data/dictionary for a given obs/manvr, run some checks, and get together the pieces
     for a formatted table.
 
@@ -613,8 +629,7 @@ def get_hi_bgd_events():
 
 def main():
     """
-    Run data fetching over a time interval and make aca_weekly_reports for the obs/manvrs in
-    in the interval.
+    aca_weekly_report main function.
     """
     opt = get_options()
     outdir = opt.out
