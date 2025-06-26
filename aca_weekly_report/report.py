@@ -508,9 +508,19 @@ def get_obsmetrics(manvr):
     links = {
         "detail_url": f"./obs_{metric['obsid']}_{metric['start']}.html",
         "starcheck": f"https://icxc.cfa.harvard.edu/mp/mplogs{metric['mp_dir']}starcheck.html#obsid{obsid}",
-        "dash": f"https://icxc.cfa.harvard.edu/aspect/centroid_reports/{strobs[0:2]}/{strobs}/",
         "mica": f"https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/",
     }
+
+    # Use modern URLs for the centroid dashboard report if it exists
+    centroid_reports_dir = Path(SKA) / "www" / "ASPECT_ICXC" / "centroid_reports"
+    report_path = centroid_reports_dir / f"{year}" / metric["load_name"] / f"{strobs}"
+    centroid_reports_url = "https://icxc.cfa.harvard.edu/aspect/centroid_reports"
+    if report_path.exists():
+        links["dash"] = f"{centroid_reports_url}/{year}/{metric['load_name']}/{strobs}/"
+    elif (centroid_reports_dir / f"{strobs[0:2]}" / f"{strobs}").exists():
+        links["dash"] = f"{centroid_reports_url}/{strobs[0:2]}/{strobs}/"
+    else:
+        links["dash"] = None
 
     metric.update(links)
     warn_map = {
@@ -589,12 +599,18 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
     print_table["load"] = f"<A HREF='{dat['starcheck']}'>{dat['load_name']}</A>"
     print_table["obsid"] = f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>"
     print_table["mica"] = f"<A HREF='{dat['mica']}'>mica</A>"
-    print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>"
+    if dat["dash"] is not None:
+        print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>"
+    else:
+        print_table["dash"] = ""
     print_table["start"] = dat["start"]
 
     # Add the rest
     for col in print_cols:
-        print_table[col] = dat[col]
+        if col in formats:
+            print_table[col] = f"{dat[col]:{formats[col]}}"
+        else:
+            print_table[col] = str(dat[col])
 
     print_table = Table([print_table])
     print_table["warns"] = href_warns
@@ -608,13 +624,6 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
         if name in print_table.colnames and print_table[name].dtype.kind in ("i", "f"):
             td_classes.append("align-right")
         td_class[name] = " ".join(td_classes)
-
-    # Update the formats of the columns to be more stringy
-    for col in print_cols:
-        if col in formats:
-            print_table[col] = f"{dat[col]:{formats[col]}}"
-        else:
-            print_table[col] = str(dat[col])
 
     # Put in order
     print_table = print_table[
