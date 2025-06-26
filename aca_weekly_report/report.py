@@ -243,7 +243,10 @@ def get_max_tccd(start, stop):
     if stop is None or DateTime(stop).secs > get_time_range("AACCCDPT")[1]:
         return np.nan
     else:
-        return np.max(fetch_sci.Msid("AACCCDPT", start, stop).vals)
+        t_ccd = fetch_sci.Msid("AACCCDPT", start, stop)
+        if t_ccd is None or len(t_ccd.vals) == 0:
+            return np.nan
+        return np.max(t_ccd.vals)
 
 
 def get_manvr_data(manvr):
@@ -300,6 +303,8 @@ def get_kalman_data(manvr):
     dat = fetch_sci.Msidset(
         ["AOKALSTR", "AOPCADMD", "AOACASEQ"], manvr.guide_start, manvr.get_next().start
     )
+    if len(dat["AOKALSTR"].vals) == 0:
+        return kalman_data
     dat.interpolate(1.025)
     ok = (dat["AOACASEQ"].vals == "KALM") & (dat["AOPCADMD"].vals == "NPNT")
     kalman_data["min_kalstr"] = np.min(dat["AOKALSTR"].vals[ok].astype(int))
