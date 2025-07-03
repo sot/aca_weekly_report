@@ -28,7 +28,6 @@ from proseco.acq import get_p_man_err
 from Ska.engarchive import fetch_sci
 from Ska.engarchive.fetch import get_time_range
 from Ska.engarchive.utils import logical_intervals
-from ska_dbi.sqsh import Sqsh
 
 SKA = os.environ["SKA"]
 MP_STARCATS = None
@@ -36,6 +35,8 @@ ACQ_STATS = None
 GUIDE_STATS = None
 HI_BGD = None
 MP_DIR = Path(SKA) / "data" / "mpcrit1" / "mplogs"
+FID_DATA = None
+FID_DATA_FILE = Path(SKA) / "www" / "ASPECT" / "fid_drop_mon" / "fids_data.dat"
 
 
 def get_options():
@@ -145,7 +146,7 @@ def get_proseco_data(pcat):
 
 def get_fid_data(pcat):
     """
-    Fetch the fid tracking metrics from the Sybase track stats table.
+    Fetch the fid tracking metrics from the fid tracking table.
 
     Combine the tracking metrics with the proseco fid catalog information
     (which has a spoiler_score / prediction of amount of spoiling).
@@ -155,17 +156,10 @@ def get_fid_data(pcat):
     """
     if len(pcat.fids) == 0:
         return []
-    with Sqsh(dbi="sybase", server="sybase", database="aca", user="aca_read") as db:
-        fids = db.fetchall(
-            f"select * from trak_stats_data where obsid = {pcat.obsid} and type = 'FID'"
-        )
+    fids = FID_DATA["slot", "track_fraction"][FID_DATA["obsid"] == pcat.obsid]
     if len(fids) > 0:
-        fids = Table(fids)
-        fids["f_track"] = (fids["n_samples"] - fids["not_tracking_samples"]) / fids[
-            "n_samples"
-        ]
-        fids = fids["slot", "f_track"]
         fids = join(pcat.fids, fids, keys=["slot"])
+        fids.rename_column("track_fraction", "f_track")
         for col in ["f_track", "yang", "zang"]:
             fids[col].format = ".2f"
         return fids["slot", "id", "yang", "zang", "spoiler_score", "f_track"]
@@ -665,6 +659,9 @@ def main():  # noqa: PLR0915 too many statements
 
     global MP_STARCATS  # noqa: PLW0603 global variable MP_STARCATS
     MP_STARCATS = get_all_starcats()
+
+    global FID_DATA  # noqa: PLW0603 global variable FID_DATA
+    FID_DATA = Table.read(FID_DATA_FILE, format="ascii")
 
     manvrs = events.manvrs.filter(start=start, stop=stop)
 
