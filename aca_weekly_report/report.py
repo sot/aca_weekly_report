@@ -244,7 +244,7 @@ def get_max_tccd(start, stop):
         return np.nan
     else:
         t_ccd = fetch_sci.Msid("AACCCDPT", start, stop)
-        if t_ccd is None or len(t_ccd.vals) == 0:
+        if len(t_ccd.vals) == 0:
             return np.nan
         return np.max(t_ccd.vals)
 
@@ -604,18 +604,13 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
     print_table["load"] = f"<A HREF='{dat['starcheck']}'>{dat['load_name']}</A>"
     print_table["obsid"] = f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>"
     print_table["mica"] = f"<A HREF='{dat['mica']}'>mica</A>"
-    if dat["dash"] is not None:
-        print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>"
-    else:
-        print_table["dash"] = ""
+    print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>" if dat["dash"] is not None else ""
     print_table["start"] = dat["start"]
 
     # Add the rest
     for col in print_cols:
-        if col in formats:
-            print_table[col] = f"{dat[col]:{formats[col]}}"
-        else:
-            print_table[col] = str(dat[col])
+        print_table[col] = f"{dat[col]:{formats[col]}}" if col in formats else str(dat[col])
+
 
     print_table = Table([print_table])
     print_table["warns"] = href_warns
