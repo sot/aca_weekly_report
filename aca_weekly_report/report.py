@@ -598,13 +598,16 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
     print_table["load"] = f"<A HREF='{dat['starcheck']}'>{dat['load_name']}</A>"
     print_table["obsid"] = f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>"
     print_table["mica"] = f"<A HREF='{dat['mica']}'>mica</A>"
-    print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>" if dat["dash"] is not None else ""
+    print_table["dash"] = (
+        f"<A HREF='{dat['dash']}'>dash</A>" if dat["dash"] is not None else ""
+    )
     print_table["start"] = dat["start"]
 
     # Add the rest
     for col in print_cols:
-        print_table[col] = f"{dat[col]:{formats[col]}}" if col in formats else str(dat[col])
-
+        print_table[col] = (
+            f"{dat[col]:{formats[col]}}" if col in formats else str(dat[col])
+        )
 
     print_table = Table([print_table])
     print_table["warns"] = href_warns
