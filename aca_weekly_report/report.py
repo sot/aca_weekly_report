@@ -12,22 +12,20 @@ import pickle
 from collections import defaultdict
 from pathlib import Path
 
+import astropy.units as u
 import kadi.commands
-import kadi.paths
-import mica.starcheck
 import mica.stats.acq_stats
 import mica.stats.guide_stats
 import numpy as np
 from astropy.table import Table, join, vstack
-from Chandra.Time import DateTime
+from cheta import fetch_sci
+from cheta.fetch import get_time_range
+from cheta.utils import logical_intervals
 from cxotime import CxoTime
 from jinja2 import Template
 from kadi import events
 from mica.utils import load_name_to_mp_dir
 from proseco.acq import get_p_man_err
-from Ska.engarchive import fetch_sci
-from Ska.engarchive.fetch import get_time_range
-from Ska.engarchive.utils import logical_intervals
 
 SKA = os.environ["SKA"]
 MP_STARCATS = None
@@ -98,7 +96,7 @@ def get_proseco_catalog(manvr):
     )
     if len(pfiles) == 1:
         acas = pickle.load(gzip.open(pfiles[0], "rb"))
-        times = [DateTime(acas[obsid].meta["date"]).secs for obsid in acas]
+        times = [CxoTime(acas[obsid].meta["date"]).secs for obsid in acas]
         obsids = list(acas.keys())
         ptable = Table([times, obsids], names=["times", "obsid"])
         ptable.sort("times")
@@ -106,7 +104,7 @@ def get_proseco_catalog(manvr):
         # So far, only obsid 47188 in recovery shows a manvr time after the catalog time
         # but I've added a minute of slop/padding to the operation to grab the catalog.
         obsid = int(
-            ptable[ptable["times"] < (DateTime(manvr.stop).secs + 60)][-1]["obsid"]
+            ptable[ptable["times"] < (CxoTime(manvr.stop).secs + 60)][-1]["obsid"]
         )
         pcat = acas[obsid]
         pcat.meta["load_name"] = mp_starcat["load_name"]
@@ -234,7 +232,7 @@ def get_max_tccd(start, stop):
     :param stop: stop time of interval
     :returns: max value from fetch or np.nan if data not available
     """
-    if stop is None or DateTime(stop).secs > get_time_range("AACCCDPT")[1]:
+    if stop is None or CxoTime(stop).secs > get_time_range("AACCCDPT")[1]:
         return np.nan
     else:
         t_ccd = fetch_sci.Msid("AACCCDPT", start, stop)
@@ -291,7 +289,7 @@ def get_kalman_data(manvr):
     if (
         manvr.guide_start is None
         or manvr.get_next() is False
-        or trange[1] < DateTime(manvr.get_next().start).secs
+        or trange[1] < CxoTime(manvr.get_next().start).secs
     ):
         return kalman_data
     dat = fetch_sci.Msidset(
@@ -645,11 +643,11 @@ def main():  # noqa: PLR0915 too many statements
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
-    stop = DateTime(opt.stop)
+    stop = CxoTime(opt.stop)
     if opt.start is None:
-        start = DateTime() - opt.days_back
+        start = CxoTime.now() - opt.days_back * u.day
     else:
-        start = DateTime(opt.start)
+        start = CxoTime(opt.start)
 
     # these globals are cop-outs but ...
     global ACQ_STATS  # noqa: PLW0603 global variable ACQ_STATS
