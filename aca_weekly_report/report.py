@@ -12,23 +12,20 @@ import pickle
 from collections import defaultdict
 from pathlib import Path
 
+import astropy.units as u
 import kadi.commands
-import kadi.paths
-import mica.starcheck
 import mica.stats.acq_stats
 import mica.stats.guide_stats
 import numpy as np
 from astropy.table import Table, join, vstack
-from Chandra.Time import DateTime
+from cheta import fetch_sci
+from cheta.fetch import get_time_range
+from cheta.utils import logical_intervals
 from cxotime import CxoTime
 from jinja2 import Template
 from kadi import events
 from mica.utils import load_name_to_mp_dir
 from proseco.acq import get_p_man_err
-from Ska.engarchive import fetch_sci
-from Ska.engarchive.fetch import get_time_range
-from Ska.engarchive.utils import logical_intervals
-from ska_dbi.sqsh import Sqsh
 
 SKA = os.environ["SKA"]
 MP_STARCATS = None
@@ -36,6 +33,8 @@ ACQ_STATS = None
 GUIDE_STATS = None
 HI_BGD = None
 MP_DIR = Path(SKA) / "data" / "mpcrit1" / "mplogs"
+FID_DATA = None
+FID_DATA_FILE = Path(SKA) / "www" / "ASPECT" / "fid_drop_mon" / "fids_data.dat"
 
 
 def get_options():
@@ -97,7 +96,7 @@ def get_proseco_catalog(manvr):
     )
     if len(pfiles) == 1:
         acas = pickle.load(gzip.open(pfiles[0], "rb"))
-        times = [DateTime(acas[obsid].meta["date"]).secs for obsid in acas]
+        times = [CxoTime(acas[obsid].meta["date"]).secs for obsid in acas]
         obsids = list(acas.keys())
         ptable = Table([times, obsids], names=["times", "obsid"])
         ptable.sort("times")
@@ -105,7 +104,7 @@ def get_proseco_catalog(manvr):
         # So far, only obsid 47188 in recovery shows a manvr time after the catalog time
         # but I've added a minute of slop/padding to the operation to grab the catalog.
         obsid = int(
-            ptable[ptable["times"] < (DateTime(manvr.stop).secs + 60)][-1]["obsid"]
+            ptable[ptable["times"] < (CxoTime(manvr.stop).secs + 60)][-1]["obsid"]
         )
         pcat = acas[obsid]
         pcat.meta["load_name"] = mp_starcat["load_name"]
@@ -145,7 +144,7 @@ def get_proseco_data(pcat):
 
 def get_fid_data(pcat):
     """
-    Fetch the fid tracking metrics from the Sybase track stats table.
+    Fetch the fid tracking metrics from the fid tracking table.
 
     Combine the tracking metrics with the proseco fid catalog information
     (which has a spoiler_score / prediction of amount of spoiling).
@@ -155,17 +154,10 @@ def get_fid_data(pcat):
     """
     if len(pcat.fids) == 0:
         return []
-    with Sqsh(dbi="sybase", server="sybase", database="aca", user="aca_read") as db:
-        fids = db.fetchall(
-            f"select * from trak_stats_data where obsid = {pcat.obsid} and type = 'FID'"
-        )
+    fids = FID_DATA["slot", "track_fraction"][FID_DATA["obsid"] == pcat.obsid]
     if len(fids) > 0:
-        fids = Table(fids)
-        fids["f_track"] = (fids["n_samples"] - fids["not_tracking_samples"]) / fids[
-            "n_samples"
-        ]
-        fids = fids["slot", "f_track"]
         fids = join(pcat.fids, fids, keys=["slot"])
+        fids.rename_column("track_fraction", "f_track")
         for col in ["f_track", "yang", "zang"]:
             fids[col].format = ".2f"
         return fids["slot", "id", "yang", "zang", "spoiler_score", "f_track"]
@@ -240,10 +232,13 @@ def get_max_tccd(start, stop):
     :param stop: stop time of interval
     :returns: max value from fetch or np.nan if data not available
     """
-    if stop is None or DateTime(stop).secs > get_time_range("AACCCDPT")[1]:
+    if stop is None or CxoTime(stop).secs > get_time_range("AACCCDPT")[1]:
         return np.nan
     else:
-        return np.max(fetch_sci.Msid("AACCCDPT", start, stop).vals)
+        t_ccd = fetch_sci.Msid("AACCCDPT", start, stop)
+        if len(t_ccd.vals) == 0:
+            return np.nan
+        return np.max(t_ccd.vals)
 
 
 def get_manvr_data(manvr):
@@ -294,12 +289,14 @@ def get_kalman_data(manvr):
     if (
         manvr.guide_start is None
         or manvr.get_next() is False
-        or trange[1] < DateTime(manvr.get_next().start).secs
+        or trange[1] < CxoTime(manvr.get_next().start).secs
     ):
         return kalman_data
     dat = fetch_sci.Msidset(
         ["AOKALSTR", "AOPCADMD", "AOACASEQ"], manvr.guide_start, manvr.get_next().start
     )
+    if len(dat["AOKALSTR"].vals) == 0:
+        return kalman_data
     dat.interpolate(1.025)
     ok = (dat["AOACASEQ"].vals == "KALM") & (dat["AOPCADMD"].vals == "NPNT")
     kalman_data["min_kalstr"] = np.min(dat["AOKALSTR"].vals[ok].astype(int))
@@ -508,9 +505,19 @@ def get_obsmetrics(manvr):
     links = {
         "detail_url": f"./obs_{metric['obsid']}_{metric['start']}.html",
         "starcheck": f"https://icxc.cfa.harvard.edu/mp/mplogs{metric['mp_dir']}starcheck.html#obsid{obsid}",
-        "dash": f"https://icxc.cfa.harvard.edu/aspect/centroid_reports/{strobs[0:2]}/{strobs}/",
         "mica": f"https://icxc.cfa.harvard.edu/aspect/mica_reports/{strobs[0:2]}/{strobs}/",
     }
+
+    # Use modern URLs for the centroid dashboard report if it exists
+    centroid_reports_dir = Path(SKA) / "www" / "ASPECT_ICXC" / "centroid_reports"
+    report_path = centroid_reports_dir / f"{year}" / metric["load_name"] / f"{strobs}"
+    centroid_reports_url = "https://icxc.cfa.harvard.edu/aspect/centroid_reports"
+    if report_path.exists():
+        links["dash"] = f"{centroid_reports_url}/{year}/{metric['load_name']}/{strobs}/"
+    elif (centroid_reports_dir / f"{strobs[0:2]}" / f"{strobs}").exists():
+        links["dash"] = f"{centroid_reports_url}/{strobs[0:2]}/{strobs}/"
+    else:
+        links["dash"] = None
 
     metric.update(links)
     warn_map = {
@@ -589,12 +596,16 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
     print_table["load"] = f"<A HREF='{dat['starcheck']}'>{dat['load_name']}</A>"
     print_table["obsid"] = f"<A HREF='{dat['detail_url']}'>{dat['obsid']}</A>"
     print_table["mica"] = f"<A HREF='{dat['mica']}'>mica</A>"
-    print_table["dash"] = f"<A HREF='{dat['dash']}'>dash</A>"
+    print_table["dash"] = (
+        f"<A HREF='{dat['dash']}'>dash</A>" if dat["dash"] is not None else ""
+    )
     print_table["start"] = dat["start"]
 
     # Add the rest
     for col in print_cols:
-        print_table[col] = dat[col]
+        print_table[col] = (
+            f"{dat[col]:{formats[col]}}" if col in formats else str(dat[col])
+        )
 
     print_table = Table([print_table])
     print_table["warns"] = href_warns
@@ -608,13 +619,6 @@ def make_metric_print(dat, warn_map):  # noqa: PLR0912 too many branches
         if name in print_table.colnames and print_table[name].dtype.kind in ("i", "f"):
             td_classes.append("align-right")
         td_class[name] = " ".join(td_classes)
-
-    # Update the formats of the columns to be more stringy
-    for col in print_cols:
-        if col in formats:
-            print_table[col] = f"{dat[col]:{formats[col]}}"
-        else:
-            print_table[col] = str(dat[col])
 
     # Put in order
     print_table = print_table[
@@ -639,11 +643,11 @@ def main():  # noqa: PLR0915 too many statements
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
-    stop = DateTime(opt.stop)
+    stop = CxoTime(opt.stop)
     if opt.start is None:
-        start = DateTime() - opt.days_back
+        start = CxoTime.now() - opt.days_back * u.day
     else:
-        start = DateTime(opt.start)
+        start = CxoTime(opt.start)
 
     # these globals are cop-outs but ...
     global ACQ_STATS  # noqa: PLW0603 global variable ACQ_STATS
@@ -656,6 +660,9 @@ def main():  # noqa: PLR0915 too many statements
 
     global MP_STARCATS  # noqa: PLW0603 global variable MP_STARCATS
     MP_STARCATS = get_all_starcats()
+
+    global FID_DATA  # noqa: PLW0603 global variable FID_DATA
+    FID_DATA = Table.read(FID_DATA_FILE, format="ascii")
 
     manvrs = events.manvrs.filter(start=start, stop=stop)
 
