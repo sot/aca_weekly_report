@@ -246,7 +246,7 @@ def _get_p_man_err(one_shot, man_angle):
     Get the probability of a one shot of the given size for the given maneuver angle.
 
     This is a helper function to get around the fact that get_p_man_err is not defined
-    for one_shot > 160.
+    for one_shot > 160.  For one_shot > 160, this just returns 0.0001.
     """
     return get_p_man_err(one_shot, man_angle) if one_shot <= 160 else 0.0001
 
