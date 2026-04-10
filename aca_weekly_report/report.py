@@ -241,6 +241,16 @@ def get_max_tccd(start, stop):
         return np.max(t_ccd.vals)
 
 
+def _get_p_man_err(one_shot, man_angle):
+    """
+    Get the probability of a one shot of the given size for the given maneuver angle.
+
+    This is a helper function to get around the fact that get_p_man_err is not defined
+    for one_shot > 160.
+    """
+    return get_p_man_err(one_shot, man_angle) if one_shot <= 160 else 0.0001
+
+
 def get_manvr_data(manvr):
     """
     Calculate likelihood of a one shot from proseco's get_p_man_err.
@@ -251,7 +261,7 @@ def get_manvr_data(manvr):
     :param manvr: kadi manvr to the dwell being reported upon
     :returns: dictionary with maneuver observed quantities and probability of one shot size
     """
-    p_man_err_before = get_p_man_err(manvr.one_shot, manvr.angle)
+    p_man_err_before = _get_p_man_err(manvr.one_shot, manvr.angle)
     if manvr.get_next() is False:
         one_shot_after = -1
         man_angle_after = -1
@@ -259,7 +269,7 @@ def get_manvr_data(manvr):
     else:
         one_shot_after = manvr.get_next().one_shot
         man_angle_after = manvr.get_next().angle
-        p_man_err_after = get_p_man_err(one_shot_after, man_angle_after)
+        p_man_err_after = _get_p_man_err(one_shot_after, man_angle_after)
     return {
         "man angle before": manvr.angle,
         "one shot before": manvr.one_shot,
